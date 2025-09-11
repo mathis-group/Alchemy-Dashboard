@@ -44,7 +44,6 @@ alchemy_dashboard/
 - **Pip / build tools** (the core uses **maturin** to build the Rust library as a Python package)
 - **Python libraries:** `bokeh`, `numpy` (plus standard library `sqlite3` for SQLite).
 
-> If your repo includes a `requirements.txt`, prefer `pip install -r requirements.txt`.
 
 ---
 

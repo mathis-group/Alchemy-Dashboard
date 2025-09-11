@@ -79,7 +79,7 @@ This compiles the Rust code into a Python extension module and installs it into 
 
 ### 4) Install Python runtime deps
 
-If you do not have a `requirements.txt`, minimally:
+ minimally:
 ```bash
 pip install bokeh numpy
 ```
@@ -124,15 +124,6 @@ The app will open in your browser and allow you to select or upload configs (e.g
 - **Can’t import the core package?** Re‑run `maturin develop --release` from the Rust crate root inside your active virtualenv.  
 - **Bokeh doesn’t open automatically?** Visit the printed local URL (e.g., http://localhost:5006/alchemy_dashboard) manually.  
 - **Version mismatch:** Verify `python --version` and `rustc --version` are sane; upgrade `pip`.
-
----
-
-## Roadmap (abridged)
-
-- More reaction rule families and parameter sweeps
-- Extended metrics (e.g., richness, turnover, lineage tracking)
-- Batch runs + result comparison UI
-- Export helpers for figures and tables
 
 ---
 

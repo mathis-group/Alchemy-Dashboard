@@ -2,7 +2,7 @@
 
 **AlChemy Chemistry** is a reimplementation of Walter Fontana’s *Alchemy* artificial chemistry, using lambda-calculus expressions as the “molecules” in a chemical soup. The core engine repeatedly “collides” lambda terms and applies reaction rules to produce new expressions, enabling studies of emergent behavior like expression diversity and population entropy over time. The system couples a high‑performance simulation core with an interactive Bokeh dashboard for configuring experiments and visualizing results.
 
-![System Overview](docs/architecture.png)
+![System Overview](system_overview.png)
 
 ---
 

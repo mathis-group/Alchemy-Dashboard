@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>{% block title %}Alchemy Experiment Dashboard{% endblock %}</title>
+    <script src="https://cdn.bokeh.org/bokeh/release/bokeh-3.6.3.min.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&amp;display=swap" rel="stylesheet"/>
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    {% block extra_head %}{% endblock %}
+</head>
+<body>
+    {{ bokeh_script|safe }}
+    <header>
+        <div class="container">
+            <div class="header-content">
+                <h1 class="header-title">Alchemy Experiment Dashboard</h1>
+                <p class="header-description">
+                    Explore and analyze your alchemy experiments with interactive visualizations, real-time data processing, and comprehensive analytics.
+                </p>
+            </div>
+        </div>
+    </header>
+
+    <div class="container">
+        <!-- Navigation -->
+        <div class="nav-container">
+            <div class="nav-wrapper">
+                <a href="{{ url_for('index') }}" class="nav-button {% if active_page == 'home' %}active{% endif %}">
+                    <i class="fas fa-home"></i>
+                    <span>Home</span>
+                </a>
+                <a href="{{ url_for('database_view') }}" class="nav-button {% if active_page == 'database' %}active{% endif %}">
+                    <i class="fas fa-database"></i>
+                    <span>Database View</span>
+                </a>
+                <a href="{{ url_for('simulation') }}" class="nav-button {% if active_page == 'simulation' %}active{% endif %}">
+                    <i class="fas fa-chart-line"></i>
+                    <span>Run Simulation</span>
+                </a>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        {% block content %}{% endblock %}
+    </div>
+
+    {% block scripts %}{% endblock %}
+</body>
+</html> 

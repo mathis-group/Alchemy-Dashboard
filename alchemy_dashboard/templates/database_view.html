@@ -1,0 +1,270 @@
+{% extends "base.html" %}
+
+{% block title %}Database View - Alchemy Experiment Dashboard{% endblock %}
+
+{% block content %}
+<div class="content-area">
+    <div class="sidebar">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="fas fa-filter card-title-icon"></i>
+                    Experiment Selection
+                </h3>
+            </div>
+            <div class="card-body">
+                <div class="form-group">
+                    <label class="form-label">Select Experiment</label>
+                    <select class="form-control" id="experiment_dropdown">
+                        <!-- Dynamically populated with database experiments -->
+                    </select>
+                </div>
+                <div class="status-message status-success" style="display: none;">
+                    <i class="fas fa-check-circle"></i>
+                    <span><strong>Success!</strong> Experiment data loaded.</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="fas fa-info-circle card-title-icon"></i>
+                    Experiment Details
+                </h3>
+            </div>
+            <div class="card-body">
+                {% if experiment.config_id > 0 %}
+                <div class="detail-row">
+                    <span class="detail-label">Generator:</span>
+                    <span class="detail-value" id="generator-type">{{ experiment.generator_type }}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Name:</span>
+                    <span class="detail-value" id="experiment-name-display">{{ experiment.name }}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Total Collisions:</span>
+                    <span class="detail-value">{{ experiment.total_collisions }}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Polling Frequency:</span>
+                    <span class="detail-value">{{ experiment.polling_frequency }}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Timestamp:</span>
+                    <span class="detail-value">{{ experiment.timestamp }}</span>
+                </div>
+                <div class="detail-row">
+                    <span class="detail-label">Generator Parameters:</span>
+                </div>
+                <div class="code-block">
+                    {{ experiment.generator_params | tojson(indent=2) }}
+                </div>
+                {% else %}
+                <div class="detail-row">
+                    <span class="detail-value">{{ experiment.name }}</span>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="main-content db-main-content">
+        {% if experiment.config_id > 0 %}
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="fas fa-chart-pie card-title-icon"></i>
+                    Entropy Over Time
+                </h3>
+            </div>
+            <div class="card-body">
+                <div class="chart-container" id="entropy-plots-container">
+                    {{ bokeh_div | safe }}
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="fas fa-chart-line card-title-icon"></i>
+                    Unique Expressions Over Time
+                </h3>
+            </div>
+            <div class="card-body">
+                <div class="chart-container" id="unique-expressions-plots-container">
+                    {{ unique_expressions_div | safe }}
+                </div>
+            </div>
+        </div>
+
+        <!-- Histogram Section -->
+        <div class="card" id="state-histogram-section" style="margin-top: 2rem;">
+            <div class="card-header">
+                <h3 class="card-title">State Histogram at Collision</h3>
+            </div>
+            <div class="card-body">
+                <div style="margin-bottom: 1rem; padding: 10px; background-color: #f8f9fa; border-radius: 5px; border-left: 4px solid #007bff;">
+                    <strong>Note:</strong> Histogram data is only available for experiments that have been imported with full state data. 
+                    <br>Try experiment 15 with collision numbers like 0, 10, 20, 30, etc. for testing.
+                </div>
+                <form id="histogram-form" style="margin-bottom: 1rem;">
+                    <label for="collision-input">Enter Collision Number:</label>
+                    <input type="number" id="collision-input" name="collision_number" min="0" style="width: 120px; margin: 0 8px;">
+                    <button type="submit" class="btn btn-primary">View Histogram</button>
+                </form>
+                <div id="histogram-content"></div>
+            </div>
+        </div>
+
+        <div id="entropy-details" class="card" style="margin-top: 2rem;">
+            <!-- Injected dynamically -->
+        </div>
+
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="fas fa-code card-title-icon"></i>
+                    Initial Expressions
+                </h3>
+            </div>
+            <div class="card-body">
+                <ul class="lambda-list">
+                    {% for expr in initial_expressions %}
+                    <li class="lambda-item">{{ expr }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+        {% else %}
+        <div class="card">
+            <div class="card-body">
+                <p class="text-center">No experiments available. Run a simulation to see results here.</p>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Set the current config ID when the page loads
+window.currentConfigID = {{ experiment.config_id }};
+
+document.addEventListener("DOMContentLoaded", function() {
+    fetch('/list_experiments')
+        .then(response => response.json())
+        .then(data => {
+            const dropdown = document.getElementById('experiment_dropdown');
+            if (data.experiments && data.experiments.length > 0) {
+                data.experiments.forEach(exp => {
+                    const option = document.createElement('option');
+                    option.value = exp.config_id;
+                    const displayName = exp.name ? 
+                        `${exp.name} (ID: ${exp.config_id})` : 
+                        `Experiment ${exp.config_id}: ${exp.generator_type}`;
+                    option.textContent = displayName;
+                    dropdown.appendChild(option);
+                });
+                
+                // Show success message
+                document.querySelector('.status-message').style.display = 'block';
+            }
+        });
+});
+
+document.getElementById('experiment_dropdown').addEventListener('change', function () {
+    const experimentId = this.value;
+    window.currentConfigID = experimentId;
+
+    // Fetch and update Bokeh visualizations
+    fetch(`/get_experiment_plot/${experimentId}`)
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === "success") {
+                const entropyPlotsContainer = document.getElementById('entropy-plots-container');
+                entropyPlotsContainer.innerHTML = data.entropy_div;
+
+                const uniqueExpressionsPlotsContainer = document.getElementById('unique-expressions-plots-container');
+                uniqueExpressionsPlotsContainer.innerHTML = data.unique_expressions_div;
+
+                const entropyScript = document.createElement("script");
+                entropyScript.type = "text/javascript";
+                entropyScript.textContent = data.entropy_script;
+                document.body.appendChild(entropyScript);
+
+                const uniqueExpressionsScript = document.createElement("script");
+                uniqueExpressionsScript.type = "text/javascript";
+                uniqueExpressionsScript.textContent = data.unique_expressions_script;
+                document.body.appendChild(uniqueExpressionsScript);
+            } else {
+                console.error("Failed to load plot data");
+            }
+        });
+
+    // Fetch and update experiment metadata + expressions
+    fetch(`/get_experiment_metadata/${experimentId}`)
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === "success") {
+                const details = data.details;
+                const expressions = data.expressions;
+
+                document.getElementById('experiment-name-display').textContent = 
+                    details.name || `Experiment ${experimentId}`;
+
+                const detailSpans = document.querySelectorAll(".detail-value");
+                detailSpans[0].textContent = details.generator_type;
+                detailSpans[1].textContent = details.total_collisions;
+                detailSpans[2].textContent = details.polling_frequency;
+                detailSpans[3].textContent = details.timestamp;
+
+                document.querySelector(".code-block").textContent = JSON.stringify(details.generator_params, null, 2);
+
+                const exprList = document.querySelector(".lambda-list");
+                exprList.innerHTML = "";
+                expressions.forEach(expr => {
+                    const li = document.createElement("li");
+                    li.className = "lambda-item";
+                    li.textContent = expr;
+                    exprList.appendChild(li);
+                });
+            } else {
+                console.error("Failed to load experiment metadata");
+            }
+        });
+});
+
+// Histogram manual fetch
+const histogramForm = document.getElementById('histogram-form');
+if (histogramForm) {
+    histogramForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const collision = document.getElementById('collision-input').value;
+        if (!collision || !window.currentConfigID) {
+            alert('Please select an experiment first and enter a valid collision number.');
+            return;
+        }
+        fetch(`/get_entropy_detail/${collision}?config_id=${window.currentConfigID}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.text();
+            })
+            .then(html => {
+                document.getElementById('histogram-content').innerHTML = html;
+                document.getElementById('histogram-content').scrollIntoView({ behavior: "smooth" });
+            })
+            .catch(error => {
+                console.error('Error fetching histogram:', error);
+                document.getElementById('histogram-content').innerHTML = 
+                    '<p style="color: red;">Error loading histogram. Please try again.</p>';
+            });
+    });
+}
+</script>
+{% endblock %} 

@@ -1,0 +1,287 @@
+{% extends "base.html" %}
+
+{% block title %}Run Simulation - Alchemy Experiment Dashboard{% endblock %}
+
+{% block content %}
+<div class="simulation-content-area">
+    <div class="simulation-config">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="fas fa-cogs card-title-icon"></i>
+                    Simulation Configuration
+                </h3>
+            </div>
+            <div class="card-body">
+                <form id="simulation-form" action="/run_simulation_form" method="POST" enctype="multipart/form-data">
+                    <div class="form-group">
+                        <label class="form-label">Experiment Name</label>
+                        <input class="form-control" type="text" name="experiment_name" placeholder="Optional - give your experiment a name" id="experiment-name"/>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">Total Collisions</label>
+                        <input class="form-control" type="number" name="total_collisions" value="1000" id="total-collisions"/>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Polling Frequency</label>
+                        <input class="form-control" type="number" name="polling_frequency" value="10" id="polling-frequency"/>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Random Seed</label>
+                        <input class="form-control" type="number" name="random_seed" value="42"/>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Generator Type</label>
+                        <select class="form-control" name="generator_type" id="generator-type">
+                            <option value="from_file">From File</option>
+                            <option value="BTree">BTree</option>
+                            <option value="Fontana" selected>Fontana</option>
+                        </select>
+                    </div>
+                    
+                    <!-- BTree Options -->
+                    <div id="btree-options" style="display: none;">
+                        <div class="form-group">
+                            <label class="form-label">Size</label>
+                            <input class="form-control" type="number" name="btree_size" value="5"/>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Free Variable Probability</label>
+                            <input class="form-control" type="number" name="freevar_probability" value="0.5" step="0.1"/>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Max Free Variables</label>
+                            <input class="form-control" type="number" name="max_free_vars" value="3"/>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Standardization</label>
+                            <select class="form-control" name="standardization">
+                                <option value="prefix" selected>Prefix</option>
+                                <option value="postfix">Postfix</option>
+                                <option value="none">None</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Number of Expressions</label>
+                            <input class="form-control" type="number" name="num_expressions" value="10"/>
+                        </div>
+                    </div>
+                    
+                    <!-- Fontana Options -->
+                    <div id="fontana-options">
+                        <div class="form-group">
+                            <label class="form-label">Abstraction Range</label>
+                            <div class="input-group">
+                                <input class="form-control" type="number" name="abs_low" value="0.1" step="0.1"/>
+                                <input class="form-control" type="number" name="abs_high" value="0.5" step="0.1"/>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Application Range</label>
+                            <div class="input-group">
+                                <input class="form-control" type="number" name="app_low" value="0.2" step="0.1"/>
+                                <input class="form-control" type="number" name="app_high" value="0.6" step="0.1"/>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Max Depth</label>
+                            <input class="form-control" type="number" name="max_depth" value="5"/>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Max Free Variables</label>
+                            <input class="form-control" type="number" name="fontana_max_fv" value="2"/>
+                        </div>
+                    </div>
+                    
+                    <!-- From File Options -->
+                    <div id="from-file-options" style="display: none;">
+                        <div class="form-group">
+                            <label class="form-label">Upload File with Expressions</label>
+                            <input class="form-control" type="file" name="expressions_file"/>
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label">Or Enter Expressions Directly</label>
+                            <textarea class="form-control" name="direct_input" rows="5" placeholder="One expression per line"></textarea>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Measurements</label>
+                        <div>
+                            <label class="checkbox-item">
+                                <input type="checkbox" name="measurements" value="entropy" checked/>
+                                <span>Entropy</span>
+                            </label>
+                            <label class="checkbox-item">
+                                <input type="checkbox" name="measurements" value="unique_expressions" checked/>
+                                <span>Unique Expressions</span>
+                            </label>
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-success btn-block">
+                        <i class="fas fa-play"></i> Run Simulation
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    
+    <div class="simulation-results">
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="fas fa-chart-line card-title-icon"></i>
+                    Simulation Status
+                </h3>
+            </div>
+            <div class="card-body">
+                <!-- Simulation Status -->
+                <div id="simulation-status" class="simulation-status idle">
+                    <i class="fas fa-pause-circle status-icon"></i>
+                    <span>Ready to Run</span>
+                </div>
+                
+                <!-- Loading indicator -->
+                <div id="loading-indicator" style="display: none; text-align: center; padding: 1rem;">
+                    <i class="fas fa-spinner fa-spin" style="font-size: 24px; color: var(--primary);"></i>
+                    <p style="margin-top: 0.5rem; font-size: 0.9rem;">Running simulation...</p>
+                </div>
+                
+                <!-- Success message -->
+                <div id="success-message" class="alert alert-success" style="display: none;">
+                    <strong>Success!</strong> <span id="success-message-text"></span>
+                </div>
+                
+                <!-- Simulation Summary -->
+                <div id="simulation-summary" class="simulation-summary" style="display: none;">
+                    <div class="summary-item">
+                        <span class="summary-label">Generator:</span>
+                        <span class="summary-value" id="summary-generator">Fontana</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Collisions:</span>
+                        <span class="summary-value" id="summary-collisions">1,000</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Expressions:</span>
+                        <span class="summary-value" id="summary-expressions">25</span>
+                    </div>
+                    <div class="summary-item">
+                        <span class="summary-label">Name:</span>
+                        <span class="summary-value" id="summary-name">Unnamed</span>
+                    </div>
+                    
+                    <!-- Link to view experiment details -->
+                    <a id="view-experiment-link" href="#" class="view-results-btn" style="display: none;">
+                        <i class="fas fa-chart-line"></i> View Full Results
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+// Show/hide generator-specific options based on selection
+document.getElementById('generator-type').addEventListener('change', function() {
+    const selectedType = this.value;
+    
+    // Hide all option groups first
+    document.getElementById('from-file-options').style.display = 'none';
+    document.getElementById('btree-options').style.display = 'none';
+    document.getElementById('fontana-options').style.display = 'none';
+    
+    // Show the selected option group
+    if (selectedType === 'from_file') {
+        document.getElementById('from-file-options').style.display = 'block';
+    } else if (selectedType === 'BTree') {
+        document.getElementById('btree-options').style.display = 'block';
+    } else if (selectedType === 'Fontana') {
+        document.getElementById('fontana-options').style.display = 'block';
+    }
+});
+
+// Initialize with the current selection
+document.getElementById('generator-type').dispatchEvent(new Event('change'));
+
+// Handle form submission
+document.getElementById('simulation-form').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    const simulationStatus = document.getElementById('simulation-status');
+    const loadingIndicator = document.getElementById('loading-indicator');
+    const successMessage = document.getElementById('success-message');
+    const successMessageText = document.getElementById('success-message-text');
+    const simulationSummary = document.getElementById('simulation-summary');
+    const viewExperimentLink = document.getElementById('view-experiment-link');
+    
+    // Update status to running
+    simulationStatus.className = 'simulation-status running';
+    simulationStatus.innerHTML = '<i class="fas fa-spinner fa-spin status-icon"></i><span>Running Simulation...</span>';
+    
+    // Show loading indicator
+    loadingIndicator.style.display = 'block';
+    successMessage.style.display = 'none';
+    simulationSummary.style.display = 'none';
+    viewExperimentLink.style.display = 'none';
+    
+    // Submit the form via AJAX
+    const formData = new FormData(this);
+    
+    fetch(this.action, {
+        method: 'POST',
+        body: formData
+    })
+    .then(response => response.json())
+    .then(data => {
+        // Hide loading indicator
+        loadingIndicator.style.display = 'none';
+        
+        if (data.status === 'error') {
+            throw new Error(data.message);
+        }
+        
+        // Update status to completed
+        simulationStatus.className = 'simulation-status completed';
+        simulationStatus.innerHTML = '<i class="fas fa-check-circle status-icon"></i><span>Simulation Complete!</span>';
+        
+        // Show success message
+        successMessageText.textContent = data.message;
+        successMessage.style.display = 'block';
+        
+        // Update and show summary
+        document.getElementById('summary-generator').textContent = document.getElementById('generator-type').options[document.getElementById('generator-type').selectedIndex].text;
+        document.getElementById('summary-collisions').textContent = document.getElementById('total-collisions').value;
+        document.getElementById('summary-expressions').textContent = data.initial_expressions || "N/A";
+        document.getElementById('summary-name').textContent = data.experiment_name || "Unnamed";
+        
+        // Set link to view full experiment
+        viewExperimentLink.href = '/view_experiment/' + data.config_id;
+        viewExperimentLink.style.display = 'flex';
+        
+        // Show summary
+        simulationSummary.style.display = 'block';
+        
+        // Scroll to results
+        document.querySelector('.simulation-results').scrollIntoView({ behavior: 'smooth' });
+    })
+    .catch(error => {
+        loadingIndicator.style.display = 'none';
+        
+        // Update status to error
+        simulationStatus.className = 'simulation-status error';
+        simulationStatus.innerHTML = '<i class="fas fa-exclamation-triangle status-icon"></i><span>Simulation Failed</span>';
+        
+        console.error('Error:', error);
+        alert('Error running simulation: ' + error.message);
+    });
+});
+</script>
+{% endblock %} 

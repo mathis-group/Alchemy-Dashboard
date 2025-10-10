@@ -272,6 +272,9 @@ def get_experiment_details_and_expressions(config_id):
     else:
         generator_params = {}
 
+    if config["freevar_generation_probability"] is not None and isinstance(generator_params, dict):
+        generator_params.setdefault('freevar_probability', config["freevar_generation_probability"])
+
     # Get expressions from first collision
     cursor.execute('''
         SELECT expression

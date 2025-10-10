@@ -23,6 +23,9 @@
                     <i class="fas fa-check-circle"></i>
                     <span><strong>Success!</strong> Experiment data loaded.</span>
                 </div>
+                <button id="delete-experiment-btn" class="btn btn-danger" type="button" style="margin-top: 0.75rem;" disabled>
+                    <i class="fas fa-trash"></i> Delete Experiment
+                </button>
             </div>
         </div>
 
@@ -45,15 +48,15 @@
                 </div>
                 <div class="detail-row">
                     <span class="detail-label">Total Collisions:</span>
-                    <span class="detail-value">{{ experiment.total_collisions }}</span>
+                    <span class="detail-value" id="total-collisions-value">{{ experiment.total_collisions }}</span>
                 </div>
                 <div class="detail-row">
                     <span class="detail-label">Polling Frequency:</span>
-                    <span class="detail-value">{{ experiment.polling_frequency }}</span>
+                    <span class="detail-value" id="polling-frequency-value">{{ experiment.polling_frequency }}</span>
                 </div>
                 <div class="detail-row">
                     <span class="detail-label">Timestamp:</span>
-                    <span class="detail-value">{{ experiment.timestamp }}</span>
+                    <span class="detail-value" id="timestamp-value">{{ experiment.timestamp }}</span>
                 </div>
                 <div class="detail-row">
                     <span class="detail-label">Generator Parameters:</span>
@@ -61,6 +64,26 @@
                 <div class="code-block">
                     {{ experiment.generator_params | tojson(indent=2) }}
                 </div>
+
+                <div id="continuation-summary" class="continuation-summary" {% if not experiment.continuation %}style="display: none;"{% endif %}>
+                    <div class="detail-row">
+                        <span class="detail-label">Continues From:</span>
+                        <span class="detail-value" id="continuation-parent">{% if experiment.continuation %}ID {{ experiment.continuation.parent_config_id }}{% else %}-{% endif %}</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Fraction Used:</span>
+                        <span class="detail-value" id="continuation-fraction">{% if experiment.continuation %}{{ (experiment.continuation.fraction_used * 100) | round(1) }}%{% else %}-{% endif %}</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Reused Expressions:</span>
+                        <span class="detail-value" id="continuation-reused">{% if experiment.continuation %}{{ experiment.continuation.reused_expression_count }}{% else %}-{% endif %}</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Added Expressions:</span>
+                        <span class="detail-value" id="continuation-added">{% if experiment.continuation %}{{ experiment.continuation.additional_expression_count }}{% else %}-{% endif %}</span>
+                    </div>
+                </div>
+
                 {% else %}
                 <div class="detail-row">
                     <span class="detail-value">{{ experiment.name }}</span>
@@ -68,6 +91,44 @@
                 {% endif %}
             </div>
         </div>
+
+        {% if experiment.config_id > 0 %}
+        <div class="card" id="recursive-tools-card" style="margin-top: 1.5rem;">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="""></i>
+                    Recursive Tools
+                </h3>
+            </div>
+            <div class="card-body">
+                <div class="detail-row">
+                    <span class="detail-label">Prepare Continuation:</span>
+                    <span class="detail-value">Reuse the final state with a chosen fraction for a new simulation.</span>
+                </div>
+                <div class="continuation-controls" style="display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; margin-top: 0.75rem;">
+                    <br>
+                    <label for="continuation-fraction-input" class="form-label" style="margin-bottom: 0;">Reuse Fraction (%)</label>
+                    <input type="number" id="continuation-fraction-input" class="form-control" value="50" min="0" max="100" step="5" style="max-width: 110px;">
+                    <button id="continue-experiment-btn" class="btn btn-secondary" type="button">
+                        <i class="fas fa-play"></i> Continue Experiment
+                    </button>
+                </div>
+                <hr style="margin: 1rem 0;">
+                <div class="detail-row">
+                    <span class="detail-label">Download Final State:</span>
+                    <button id="download-final-state-btn" class="btn btn-link" type="button" style="padding: 0;">
+                        <i class="fas fa-file-download"></i> Download Latest State
+                    </button>
+                </div>
+                <div class="detail-row" id="download-initial-state-row" style="display: {% if experiment.continuation %}flex{% else %}none{% endif %}; align-items: center; gap: 0.5rem;">
+                    <span class="detail-label">Initial Mix:</span>
+                    <button id="download-initial-state-btn" class="btn btn-link" type="button" style="padding: 0;">
+                        <i class="fas fa-file-download"></i> Download Applied Initial State
+                    </button>
+                </div>
+            </div>
+        </div>
+        {% endif %}
     </div>
 
     <div class="main-content db-main-content">
@@ -131,11 +192,26 @@
                 </h3>
             </div>
             <div class="card-body">
-                <ul class="lambda-list">
-                    {% for expr in initial_expressions %}
-                    <li class="lambda-item">{{ expr }}</li>
-                    {% endfor %}
-                </ul>
+                <div class="expression-toolbar">
+                    <button id="toggle-expressions-btn" class="expression-link" type="button" data-expanded="false">
+                        <i class="fas fa-eye"></i>
+                        <span>Display all</span>
+                    </button>
+                    {% if experiment.config_id > 0 %}
+                    <a id="download-expressions-link" class="expression-link" href="{{ url_for('download_initial_expressions', config_id=experiment.config_id) }}">
+                        <i class="fas fa-file-download"></i>
+                        <span>Download text</span>
+                    </a>
+                    {% endif %}
+                </div>
+                <div id="initial-expressions-wrapper" class="lambda-wrapper collapsed">
+                    <ul class="lambda-list" id="initial-expression-list">
+                        {% for expr in initial_expressions %}
+                        <li class="lambda-item">{{ expr }}</li>
+                        {% endfor %}
+                    </ul>
+                    <div class="lambda-fade"></div>
+                </div>
             </div>
         </div>
         {% else %}
@@ -154,12 +230,92 @@
 // Set the current config ID when the page loads
 window.currentConfigID = {{ experiment.config_id }};
 
+const experimentDropdown = document.getElementById('experiment_dropdown');
+const deleteExperimentButton = document.getElementById('delete-experiment-btn');
+const expressionsWrapper = document.getElementById('initial-expressions-wrapper');
+const toggleExpressionsButton = document.getElementById('toggle-expressions-btn');
+const downloadExpressionsLink = document.getElementById('download-expressions-link');
+const expressionListElement = document.getElementById('initial-expression-list');
+
+function updateDeleteButtonState() {
+    if (!deleteExperimentButton || !experimentDropdown) {
+        return;
+    }
+    deleteExperimentButton.disabled = !experimentDropdown.value;
+}
+
+function updateDownloadLink(configId) {
+    if (!downloadExpressionsLink) {
+        return;
+    }
+    const numericId = Number(configId);
+    if (Number.isFinite(numericId) && numericId > 0) {
+        downloadExpressionsLink.href = `/download_initial_expressions/${numericId}`;
+        downloadExpressionsLink.style.display = 'inline-flex';
+    } else {
+        downloadExpressionsLink.style.display = 'none';
+    }
+}
+
+function updateExpressionFade() {
+    if (!expressionsWrapper) {
+        return;
+    }
+    const fadeElement = expressionsWrapper.querySelector('.lambda-fade');
+    if (!fadeElement) {
+        return;
+    }
+    const shouldShow = !expressionsWrapper.classList.contains('expanded') &&
+        expressionsWrapper.scrollHeight > expressionsWrapper.clientHeight + 1;
+    fadeElement.style.display = shouldShow ? '' : 'none';
+}
+
+function setExpressionsExpanded(expanded) {
+    if (!expressionsWrapper || !toggleExpressionsButton) {
+        return;
+    }
+    expressionsWrapper.classList.toggle('expanded', expanded);
+    expressionsWrapper.classList.toggle('collapsed', !expanded);
+    toggleExpressionsButton.dataset.expanded = expanded ? 'true' : 'false';
+    const icon = toggleExpressionsButton.querySelector('i');
+    const label = toggleExpressionsButton.querySelector('span');
+    if (icon) {
+        icon.className = expanded ? 'fas fa-eye-slash' : 'fas fa-eye';
+    }
+    if (label) {
+        label.textContent = expanded ? 'Hide all' : 'Display all';
+    }
+    requestAnimationFrame(updateExpressionFade);
+}
+
+function resetExpressionsView() {
+    if (!expressionListElement) {
+        return;
+    }
+    if (toggleExpressionsButton) {
+        toggleExpressionsButton.style.display = expressionListElement.children.length > 0 ? 'inline-flex' : 'none';
+    }
+    setExpressionsExpanded(false);
+}
+
+window.addEventListener('resize', updateExpressionFade);
+
 document.addEventListener("DOMContentLoaded", function() {
+    updateDownloadLink(window.currentConfigID);
+
+    if (toggleExpressionsButton) {
+        toggleExpressionsButton.addEventListener('click', function() {
+            const expanded = toggleExpressionsButton.dataset.expanded === 'true';
+            setExpressionsExpanded(!expanded);
+        });
+    }
+
+    resetExpressionsView();
+
     fetch('/list_experiments')
         .then(response => response.json())
         .then(data => {
-            const dropdown = document.getElementById('experiment_dropdown');
-            if (data.experiments && data.experiments.length > 0) {
+            if (data.experiments && data.experiments.length > 0 && experimentDropdown) {
                 data.experiments.forEach(exp => {
                     const option = document.createElement('option');
                     option.value = exp.config_id;
@@ -167,76 +323,212 @@ document.addEventListener("DOMContentLoaded", function() {
                         `${exp.name} (ID: ${exp.config_id})` : 
                         `Experiment ${exp.config_id}: ${exp.generator_type}`;
                     option.textContent = displayName;
-                    dropdown.appendChild(option);
+                    experimentDropdown.appendChild(option);
                 });
                 
                 // Show success message
                 document.querySelector('.status-message').style.display = 'block';
             }
+            updateDeleteButtonState();
         });
+
+    const continueButton = document.getElementById('continue-experiment-btn');
+    if (continueButton) {
+        continueButton.addEventListener('click', function() {
+            if (!window.currentConfigID) {
+                alert('Please select an experiment to continue.');
+                return;
+            }
+            const fractionInput = document.getElementById('continuation-fraction-input');
+            const rawValue = fractionInput ? parseFloat(fractionInput.value) : 0;
+            const fraction = isNaN(rawValue) ? 0 : Math.max(0, Math.min(100, rawValue));
+            const targetUrl = `/simulation?continue_from=${window.currentConfigID}&fraction=${fraction}`;
+            window.location.href = targetUrl;
+        });
+    }
+
+    const finalDownloadButton = document.getElementById('download-final-state-btn');
+    if (finalDownloadButton && window.currentConfigID) {
+        finalDownloadButton.onclick = () => {
+            window.location.href = `/download_final_state/${window.currentConfigID}`;
+        };
+    }
+
+    const initialDownloadButton = document.getElementById('download-initial-state-btn');
+    if (initialDownloadButton && window.currentConfigID) {
+        initialDownloadButton.onclick = () => {
+            window.location.href = `/download_initial_state/${window.currentConfigID}`;
+        };
+    }
+
+    if (deleteExperimentButton) {
+        deleteExperimentButton.addEventListener('click', function() {
+            if (!window.currentConfigID) {
+                alert('Please select an experiment to delete.');
+                return;
+            }
+            const selectedOption = experimentDropdown ? experimentDropdown.options[experimentDropdown.selectedIndex] : null;
+            const experimentLabel = selectedOption ? selectedOption.textContent : `Experiment ${window.currentConfigID}`;
+            const confirmed = confirm(`Delete ${experimentLabel}? This action cannot be undone.`);
+            if (!confirmed) {
+                return;
+            }
+            fetch('/delete_experiment', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ config_id: Number(window.currentConfigID) })
+            })
+            .then(res => res.json())
+            .then(response => {
+                if (response.status === 'success') {
+                    window.location.reload();
+                } else {
+                    throw new Error(response.message || 'Failed to delete experiment');
+                }
+            })
+            .catch(err => {
+                alert(`Unable to delete experiment: ${err.message}`);
+            });
+        });
+    }
 });
 
-document.getElementById('experiment_dropdown').addEventListener('change', function () {
-    const experimentId = this.value;
-    window.currentConfigID = experimentId;
+if (experimentDropdown) {
+    experimentDropdown.addEventListener('change', function () {
+        const experimentId = this.value;
+        window.currentConfigID = experimentId;
+        updateDeleteButtonState();
 
-    // Fetch and update Bokeh visualizations
-    fetch(`/get_experiment_plot/${experimentId}`)
-        .then(res => res.json())
-        .then(data => {
-            if (data.status === "success") {
-                const entropyPlotsContainer = document.getElementById('entropy-plots-container');
-                entropyPlotsContainer.innerHTML = data.entropy_div;
+        // Fetch and update Bokeh visualizations
+        fetch(`/get_experiment_plot/${experimentId}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === "success") {
+                    const entropyPlotsContainer = document.getElementById('entropy-plots-container');
+                    entropyPlotsContainer.innerHTML = data.entropy_div;
 
-                const uniqueExpressionsPlotsContainer = document.getElementById('unique-expressions-plots-container');
-                uniqueExpressionsPlotsContainer.innerHTML = data.unique_expressions_div;
+                    const uniqueExpressionsPlotsContainer = document.getElementById('unique-expressions-plots-container');
+                    uniqueExpressionsPlotsContainer.innerHTML = data.unique_expressions_div;
 
-                const entropyScript = document.createElement("script");
-                entropyScript.type = "text/javascript";
-                entropyScript.textContent = data.entropy_script;
-                document.body.appendChild(entropyScript);
+                    const entropyScript = document.createElement("script");
+                    entropyScript.type = "text/javascript";
+                    entropyScript.textContent = data.entropy_script;
+                    document.body.appendChild(entropyScript);
 
-                const uniqueExpressionsScript = document.createElement("script");
-                uniqueExpressionsScript.type = "text/javascript";
-                uniqueExpressionsScript.textContent = data.unique_expressions_script;
-                document.body.appendChild(uniqueExpressionsScript);
-            } else {
-                console.error("Failed to load plot data");
-            }
-        });
+                    const uniqueExpressionsScript = document.createElement("script");
+                    uniqueExpressionsScript.type = "text/javascript";
+                    uniqueExpressionsScript.textContent = data.unique_expressions_script;
+                    document.body.appendChild(uniqueExpressionsScript);
+                } else {
+                    console.error("Failed to load plot data");
+                }
+            });
 
-    // Fetch and update experiment metadata + expressions
-    fetch(`/get_experiment_metadata/${experimentId}`)
-        .then(res => res.json())
-        .then(data => {
-            if (data.status === "success") {
-                const details = data.details;
-                const expressions = data.expressions;
+        // Fetch and update experiment metadata + expressions
+        fetch(`/get_experiment_metadata/${experimentId}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === "success") {
+                    const details = data.details;
+                    const expressions = data.expressions;
 
-                document.getElementById('experiment-name-display').textContent = 
-                    details.name || `Experiment ${experimentId}`;
+                    document.getElementById('experiment-name-display').textContent = 
+                        details.name || `Experiment ${experimentId}`;
 
-                const detailSpans = document.querySelectorAll(".detail-value");
-                detailSpans[0].textContent = details.generator_type;
-                detailSpans[1].textContent = details.total_collisions;
-                detailSpans[2].textContent = details.polling_frequency;
-                detailSpans[3].textContent = details.timestamp;
+                    const generatorTypeSpan = document.getElementById('generator-type');
+                    if (generatorTypeSpan) {
+                        generatorTypeSpan.textContent = details.generator_type;
+                    }
+                    const totalCollisionsSpan = document.getElementById('total-collisions-value');
+                    if (totalCollisionsSpan) {
+                        totalCollisionsSpan.textContent = details.total_collisions;
+                    }
+                    const pollingFrequencySpan = document.getElementById('polling-frequency-value');
+                    if (pollingFrequencySpan) {
+                        pollingFrequencySpan.textContent = details.polling_frequency;
+                    }
+                    const timestampSpan = document.getElementById('timestamp-value');
+                    if (timestampSpan) {
+                        timestampSpan.textContent = details.timestamp;
+                    }
 
-                document.querySelector(".code-block").textContent = JSON.stringify(details.generator_params, null, 2);
+                    document.querySelector(".code-block").textContent = JSON.stringify(details.generator_params, null, 2);
 
-                const exprList = document.querySelector(".lambda-list");
-                exprList.innerHTML = "";
-                expressions.forEach(expr => {
-                    const li = document.createElement("li");
-                    li.className = "lambda-item";
-                    li.textContent = expr;
-                    exprList.appendChild(li);
-                });
-            } else {
-                console.error("Failed to load experiment metadata");
-            }
-        });
-});
+                    if (expressionListElement) {
+                        expressionListElement.innerHTML = "";
+                        if (Array.isArray(expressions) && expressions.length > 0) {
+                            expressions.forEach(expr => {
+                                const li = document.createElement("li");
+                                li.className = "lambda-item";
+                                li.textContent = expr;
+                                expressionListElement.appendChild(li);
+                            });
+                        }
+                    }
+
+                    updateDownloadLink(experimentId);
+                    resetExpressionsView();
+
+                    const continuationSummary = document.getElementById('continuation-summary');
+                    const continuationParent = document.getElementById('continuation-parent');
+                    const continuationFraction = document.getElementById('continuation-fraction');
+                    const continuationReused = document.getElementById('continuation-reused');
+                    const continuationAdded = document.getElementById('continuation-added');
+
+                    const initialDownloadRow = document.getElementById('download-initial-state-row');
+                    const initialDownloadButton = document.getElementById('download-initial-state-btn');
+
+                    if (continuationSummary) {
+                        const continuationData = details.continuation;
+                        if (continuationData) {
+                            continuationSummary.style.display = 'block';
+                            if (continuationParent) {
+                                continuationParent.textContent = `ID ${continuationData.parent_config_id}`;
+                            }
+                            if (continuationFraction) {
+                                const fractionValue = typeof continuationData.fraction_used === 'number'
+                                    ? (continuationData.fraction_used * 100).toFixed(1) + '%'
+                                    : '-';
+                                continuationFraction.textContent = fractionValue;
+                            }
+                            if (continuationReused) {
+                                continuationReused.textContent = continuationData.reused_expression_count ?? '-';
+                            }
+                            if (continuationAdded) {
+                                continuationAdded.textContent = continuationData.additional_expression_count ?? '-';
+                            }
+                            if (initialDownloadRow && initialDownloadButton) {
+                                initialDownloadRow.style.display = 'flex';
+                                initialDownloadButton.onclick = () => {
+                                    window.location.href = `/download_initial_state/${experimentId}`;
+                                };
+                            }
+                        } else {
+                            continuationSummary.style.display = 'none';
+                            if (initialDownloadRow) {
+                                initialDownloadRow.style.display = 'none';
+                            }
+                        }
+                    }
+                    const finalDownloadButton = document.getElementById('download-final-state-btn');
+                    if (finalDownloadButton) {
+                        finalDownloadButton.onclick = () => {
+                            window.location.href = `/download_final_state/${experimentId}`;
+                        };
+                    }
+
+                    const fractionInput = document.getElementById('continuation-fraction-input');
+                    if (fractionInput) {
+                        fractionInput.value = 50;
+                    }
+                } else {
+                    console.error("Failed to load experiment metadata");
+                }
+            });
+    });
+}
 
 // Histogram manual fetch
 const histogramForm = document.getElementById('histogram-form');

@@ -61,6 +61,26 @@ def init_database():
         FOREIGN KEY (config_id) REFERENCES Configurations(config_id)
     )
     ''')
+
+    # Track recursive experiments / continuations
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS ContinuationMetadata (
+        child_config_id INTEGER PRIMARY KEY,
+        parent_config_id INTEGER NOT NULL,
+        fraction_used REAL NOT NULL,
+        reused_expression_count INTEGER NOT NULL DEFAULT 0,
+        additional_expression_count INTEGER NOT NULL,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (child_config_id) REFERENCES Configurations(config_id),
+        FOREIGN KEY (parent_config_id) REFERENCES Configurations(config_id)
+    )
+    ''')
+
+    # Ensure reused_expression_count column exists for older databases
+    try:
+        cursor.execute("SELECT reused_expression_count FROM ContinuationMetadata LIMIT 1")
+    except sqlite3.OperationalError:
+        cursor.execute("ALTER TABLE ContinuationMetadata ADD COLUMN reused_expression_count INTEGER NOT NULL DEFAULT 0")
     
     conn.commit()
     conn.close()
@@ -209,9 +229,57 @@ def save_averages(config_id, collision_number, entropy, unique_expressions):
         entropy,
         unique_expressions
     ))
-    
+
     conn.commit()
     conn.close()
+
+
+def save_continuation_metadata(child_config_id, parent_config_id, fraction_used, reused_expression_count, additional_expression_count):
+    """Record metadata for a continuation experiment."""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+
+    cursor.execute('''
+        INSERT OR REPLACE INTO ContinuationMetadata
+        (child_config_id, parent_config_id, fraction_used, reused_expression_count, additional_expression_count)
+        VALUES (?, ?, ?, ?, ?)
+    ''', (
+        child_config_id,
+        parent_config_id,
+        fraction_used,
+        reused_expression_count,
+        additional_expression_count
+    ))
+
+    conn.commit()
+    conn.close()
+
+
+def get_continuation_metadata(child_config_id):
+    """Fetch continuation metadata for a given experiment."""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+
+    cursor.execute('''
+        SELECT parent_config_id, fraction_used, reused_expression_count, additional_expression_count, created_at
+        FROM ContinuationMetadata
+        WHERE child_config_id = ?
+    ''', (child_config_id,))
+
+    row = cursor.fetchone()
+    conn.close()
+
+    if not row:
+        return None
+
+    return {
+        'parent_config_id': row[0],
+        'fraction_used': row[1],
+        'reused_expression_count': row[2],
+        'additional_expression_count': row[3],
+        'created_at': row[4]
+    }
+
 
 def get_last_config_id():
     """Get the ID of the most recently added configuration."""
@@ -231,14 +299,14 @@ def get_experiment_configs():
     cursor = conn.cursor()
     
     cursor.execute('''
-    SELECT config_id, random_seed, generator_type, total_collisions, polling_frequency, timestamp
+    SELECT config_id, random_seed, generator_type, total_collisions, polling_frequency, timestamp, probability_range, freevar_generation_probability, name
     FROM Configurations
     ORDER BY timestamp DESC
     ''')
-    
+
     configs = [dict(row) for row in cursor.fetchall()]
     conn.close()
-    
+
     return configs
 
 def get_experiment_data(config_id):
@@ -287,6 +355,26 @@ def get_experiment_expressions(config_id, collision_number):
     
     return expressions
 
+
+def delete_experiment(config_id):
+    """Remove an experiment and all associated records from the database."""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute('DELETE FROM ContinuationMetadata WHERE child_config_id = ? OR parent_config_id = ?', (config_id, config_id))
+        cursor.execute('DELETE FROM Experiment WHERE config_id = ?', (config_id,))
+        cursor.execute('DELETE FROM Averages WHERE config_id = ?', (config_id,))
+        cursor.execute('DELETE FROM Configurations WHERE config_id = ?', (config_id,))
+        conn.commit()
+        return True
+    except Exception as exc:
+        print(f"Error deleting experiment {config_id}: {exc}")
+        conn.rollback()
+        return False
+    finally:
+        conn.close()
+
 # If not already present:
 from sqlalchemy.orm import sessionmaker
 
@@ -300,4 +388,3 @@ db_session = Session()
 __all__ = ["Base", "ExperimentConfiguration", "ExperimentResult", "db_session"]
 from sqlalchemy import Column, Integer, Float, ForeignKey
 from sqlalchemy.orm import relationship
-

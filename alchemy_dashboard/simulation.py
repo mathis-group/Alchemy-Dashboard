@@ -3,14 +3,8 @@
 import os
 import alchemy
 import random
-import json
 from collections import Counter
-from models import (
-    save_configuration, 
-    save_experiment_state, 
-    save_averages, 
-    get_last_config_id
-)
+from db_utils import get_expressions_for_collision
 
 def load_input_expressions(generator_type, gen_params):
     """
@@ -52,6 +46,65 @@ def load_input_expressions(generator_type, gen_params):
         return ["(λx.x)", "(λy.y)", "(λz.z)"]
 
 
+# Continuation helpers
+def _build_continuation_expressions(parent_config_id, fraction):
+    """Return expressions drawn from the parent's last recorded state."""
+    if parent_config_id is None or fraction <= 0:
+        return []
+
+    last_state = get_expressions_for_collision(parent_config_id, -1)
+    if not last_state:
+        return []
+
+    # Clamp fraction to [0.0, 1.0]
+    fraction = max(0.0, min(1.0, fraction))
+    if fraction == 0:
+        return []
+
+    total_population = sum(count for _, count in last_state)
+    if total_population == 0:
+        return []
+
+    target_total = max(1, int(round(total_population * fraction)))
+
+    sampled = []
+    sampled_counter = Counter()
+    remaining = target_total
+
+    for expression, count in last_state:
+        if remaining <= 0:
+            break
+
+        take = int(round(count * fraction))
+        if take <= 0 and count > 0:
+            # Guarantee at least one instance if we still need samples
+            take = 1
+
+        take = min(take, count, remaining)
+        if take <= 0:
+            continue
+
+        sampled.extend([expression] * take)
+        sampled_counter[expression] += take
+        remaining -= take
+
+    # If rounding undershot, top up greedily with available counts
+    if remaining > 0:
+        for expression, count in last_state:
+            if remaining <= 0:
+                break
+            already_taken = sampled_counter.get(expression, 0)
+            available = count - already_taken
+            if available <= 0:
+                continue
+            take = min(available, remaining)
+            sampled.extend([expression] * take)
+            sampled_counter[expression] += take
+            remaining -= take
+
+    return sampled
+
+
 # Update run_experiment function to handle experiment naming
 def run_experiment(config):
     """
@@ -74,10 +127,15 @@ def run_experiment(config):
     
     # Initialize metrics collection
     metrics = []
-    initial_expressions = []
     
     # Configure generator based on type
     generator_type = config['generator_type']
+    continuation_info = config.get('continuation') or {}
+    parent_config_id = continuation_info.get('parent_config_id')
+    fraction_used = continuation_info.get('fraction', 0.0)
+
+    continuation_expressions = _build_continuation_expressions(parent_config_id, fraction_used)
+    new_expressions = []
     
     if generator_type == 'BTree':
         # Configure BTree generator
@@ -89,7 +147,7 @@ def run_experiment(config):
             std=std
         )
         # Generate initial expressions
-        initial_expressions = generator.generate_n(config['num_expressions'])
+        new_expressions = generator.generate_n(config['num_expressions'])
         
     elif generator_type == 'Fontana':
         # Configure Fontana generator
@@ -100,24 +158,32 @@ def run_experiment(config):
             max_free_vars=config['max_free_vars']
         )
         # Generate initial expressions
-        initial_expressions = []
-        for _ in range(10):  # Default to 10 expressions
+        desired = config.get('initial_expression_count', 10)
+        new_expressions = []
+        for _ in range(desired):
             expr = generator.generate()
             if expr:
-                initial_expressions.append(expr)
+                new_expressions.append(expr)
         
     elif generator_type == 'from_file':
         # Handle file-based input
         if 'file_path' in config:
             with open(config['file_path'], 'r') as f:
-                initial_expressions = [line.strip() for line in f if line.strip()]
+                new_expressions = [line.strip() for line in f if line.strip()]
         elif 'expressions' in config:
-            initial_expressions = config['expressions']
+            new_expressions = config['expressions']
         else:
-            raise ValueError("No expressions provided for 'from_file' generator")
+            if not continuation_expressions:
+                raise ValueError("No expressions provided for 'from_file' generator")
+            new_expressions = []
     
     else:
         raise ValueError(f"Unknown generator type: {generator_type}")
+
+    initial_expressions = continuation_expressions + new_expressions
+
+    if not initial_expressions:
+        raise ValueError("No initial expressions available to start the simulation")
     
     # Initialize simulation
     simulation = alchemy.PySoup()
@@ -141,5 +207,11 @@ def run_experiment(config):
     
     return {
         'metrics': metrics,
-        'initial_expressions': initial_expressions
+        'initial_expressions': initial_expressions,
+        'continuation_summary': {
+            'parent_config_id': parent_config_id,
+            'fraction_used': fraction_used,
+            'continued_expression_count': len(continuation_expressions),
+            'new_expression_count': len(new_expressions)
+        }
     }

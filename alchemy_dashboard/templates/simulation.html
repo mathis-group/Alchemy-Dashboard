@@ -14,9 +14,22 @@
             </div>
             <div class="card-body">
                 <form id="simulation-form" action="/run_simulation_form" method="POST" enctype="multipart/form-data">
+                    <input type="hidden" name="continuation_parent_id" id="continuation-parent-id" />
+                    <input type="hidden" name="continuation_fraction" id="continuation-fraction" />
+
+                    <div id="continuation-banner" class="alert alert-info" style="display: none;">
+                        <i class="fas fa-redo"></i>
+                        Continuing from <span id="continuation-banner-name"></span>
+                    </div>
+
                     <div class="form-group">
                         <label class="form-label">Experiment Name</label>
                         <input class="form-control" type="text" name="experiment_name" placeholder="Optional - give your experiment a name" id="experiment-name"/>
+                    </div>
+
+                    <div class="form-group" id="continuation-settings" style="display: none;">
+                        <label class="form-label" for="continuation-fraction-display">Reuse Fraction (%)</label>
+                        <input class="form-control" type="number" id="continuation-fraction-display" min="0" max="100" step="5" />
                     </div>
 
                     <div class="form-group">
@@ -95,6 +108,10 @@
                             <label class="form-label">Max Free Variables</label>
                             <input class="form-control" type="number" name="fontana_max_fv" value="2"/>
                         </div>
+                        <div class="form-group">
+                            <label class="form-label">Initial Expression Count</label>
+                            <input class="form-control" type="number" name="fontana_expression_count" value="10" min="1"/>
+                        </div>
                     </div>
                     
                     <!-- From File Options -->
@@ -167,7 +184,7 @@
                         <span class="summary-label">Collisions:</span>
                         <span class="summary-value" id="summary-collisions">1,000</span>
                     </div>
-                    <div class="summary-item">
+                    <div class="summary-item" data-summary="expressions">
                         <span class="summary-label">Expressions:</span>
                         <span class="summary-value" id="summary-expressions">25</span>
                     </div>
@@ -175,10 +192,13 @@
                         <span class="summary-label">Name:</span>
                         <span class="summary-value" id="summary-name">Unnamed</span>
                     </div>
-                    
+
                     <!-- Link to view experiment details -->
                     <a id="view-experiment-link" href="#" class="view-results-btn" style="display: none;">
                         <i class="fas fa-chart-line"></i> View Full Results
+                    </a>
+                    <a id="download-initial-state-link" href="#" class="view-results-btn" style="display: none;">
+                        <i class="fas fa-file-download"></i> Download Initial State
                     </a>
                 </div>
             </div>
@@ -189,16 +209,24 @@
 
 {% block scripts %}
 <script>
-// Show/hide generator-specific options based on selection
-document.getElementById('generator-type').addEventListener('change', function() {
-    const selectedType = this.value;
-    
-    // Hide all option groups first
+const generatorSelect = document.getElementById('generator-type');
+const fractionHiddenInput = document.getElementById('continuation-fraction');
+const fractionDisplayInput = document.getElementById('continuation-fraction-display');
+const continuationSettingsGroup = document.getElementById('continuation-settings');
+
+function clampFraction(value) {
+    if (isNaN(value)) {
+        return 0;
+    }
+    return Math.max(0, Math.min(100, value));
+}
+
+function toggleGeneratorOptions() {
     document.getElementById('from-file-options').style.display = 'none';
     document.getElementById('btree-options').style.display = 'none';
     document.getElementById('fontana-options').style.display = 'none';
-    
-    // Show the selected option group
+
+    const selectedType = generatorSelect.value;
     if (selectedType === 'from_file') {
         document.getElementById('from-file-options').style.display = 'block';
     } else if (selectedType === 'BTree') {
@@ -206,79 +234,204 @@ document.getElementById('generator-type').addEventListener('change', function() 
     } else if (selectedType === 'Fontana') {
         document.getElementById('fontana-options').style.display = 'block';
     }
-});
+}
 
-// Initialize with the current selection
-document.getElementById('generator-type').dispatchEvent(new Event('change'));
+generatorSelect.addEventListener('change', toggleGeneratorOptions);
+toggleGeneratorOptions();
 
-// Handle form submission
-document.getElementById('simulation-form').addEventListener('submit', function(e) {
+if (fractionDisplayInput) {
+    fractionDisplayInput.addEventListener('input', function() {
+        const clamped = clampFraction(parseFloat(this.value));
+        this.value = clamped;
+        if (fractionHiddenInput) {
+            fractionHiddenInput.value = clamped;
+        }
+    });
+}
+
+function setValue(selector, value) {
+    if (value === undefined || value === null) {
+        return;
+    }
+    const element = document.querySelector(selector);
+    if (element) {
+        element.value = value;
+    }
+}
+
+function applyGeneratorParams(generatorType, params) {
+    if (!params) {
+        return;
+    }
+
+    if (generatorType === 'BTree') {
+        setValue('input[name="btree_size"]', params.size);
+        const freevarValue = params.freevar_probability ?? params.freevar_generation_probability;
+        setValue('input[name="freevar_probability"]', freevarValue);
+        setValue('input[name="max_free_vars"]', params.max_free_vars);
+        const standardizationSelect = document.querySelector('select[name="standardization"]');
+        if (standardizationSelect && params.standardization) {
+            standardizationSelect.value = params.standardization;
+        }
+        setValue('input[name="num_expressions"]', params.num_expressions);
+    } else if (generatorType === 'Fontana') {
+        const absLow = params.abs_low ?? (Array.isArray(params.abs_range) ? params.abs_range[0] : undefined);
+        const absHigh = params.abs_high ?? (Array.isArray(params.abs_range) ? params.abs_range[1] : undefined);
+        const appLow = params.app_low ?? (Array.isArray(params.app_range) ? params.app_range[0] : undefined);
+        const appHigh = params.app_high ?? (Array.isArray(params.app_range) ? params.app_range[1] : undefined);
+        setValue('input[name="abs_low"]', absLow);
+        setValue('input[name="abs_high"]', absHigh);
+        setValue('input[name="app_low"]', appLow);
+        setValue('input[name="app_high"]', appHigh);
+        setValue('input[name="max_depth"]', params.max_depth);
+        setValue('input[name="fontana_max_fv"]', params.max_free_vars ?? params.fontana_max_fv);
+        const expressionCount = params.initial_expression_count ?? params.expression_count;
+        setValue('input[name="fontana_expression_count"]', expressionCount);
+    }
+}
+
+function applyContinuationParams() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const continueFrom = urlParams.get('continue_from');
+    if (!continueFrom) {
+        return;
+    }
+
+    const requestedFraction = parseFloat(urlParams.get('fraction') || '');
+    fetch(`/api/continuation_config/${continueFrom}`)
+        .then(res => res.json())
+        .then(data => {
+            if (data.status !== 'success') {
+                console.error('Continuation config error:', data.message);
+                return;
+            }
+
+            const fallbackFraction = data.default_fraction != null ? data.default_fraction * 100 : 50;
+            const fractionPercent = clampFraction(isNaN(requestedFraction) ? fallbackFraction : requestedFraction);
+
+            if (fractionHiddenInput) {
+                fractionHiddenInput.value = fractionPercent;
+            }
+            if (fractionDisplayInput && continuationSettingsGroup) {
+                continuationSettingsGroup.style.display = 'block';
+                fractionDisplayInput.value = fractionPercent;
+            }
+
+            const parentInput = document.getElementById('continuation-parent-id');
+            if (parentInput) {
+                parentInput.value = data.config_id;
+            }
+
+            const banner = document.getElementById('continuation-banner');
+            const bannerName = document.getElementById('continuation-banner-name');
+            if (banner) {
+                banner.style.display = 'block';
+                if (bannerName) {
+                    bannerName.textContent = `${data.name} (ID ${data.config_id})`;
+                }
+            }
+
+            setValue('#experiment-name', `${data.name} (continued)`);
+            setValue('#total-collisions', data.total_collisions);
+            setValue('#polling-frequency', data.polling_frequency);
+            setValue('input[name="random_seed"]', data.random_seed);
+
+            generatorSelect.value = data.generator_type;
+            generatorSelect.dispatchEvent(new Event('change'));
+            applyGeneratorParams(data.generator_type, data.generator_params);
+        })
+        .catch(err => console.error('Failed to apply continuation params:', err));
+}
+
+applyContinuationParams();
+
+const simulationForm = document.getElementById('simulation-form');
+simulationForm.addEventListener('submit', function(e) {
     e.preventDefault();
-    
+
+    if (fractionDisplayInput && fractionHiddenInput) {
+        const clamped = clampFraction(parseFloat(fractionDisplayInput.value));
+        fractionDisplayInput.value = clamped;
+        fractionHiddenInput.value = clamped;
+    }
+
     const simulationStatus = document.getElementById('simulation-status');
     const loadingIndicator = document.getElementById('loading-indicator');
     const successMessage = document.getElementById('success-message');
     const successMessageText = document.getElementById('success-message-text');
     const simulationSummary = document.getElementById('simulation-summary');
     const viewExperimentLink = document.getElementById('view-experiment-link');
-    
-    // Update status to running
+
     simulationStatus.className = 'simulation-status running';
     simulationStatus.innerHTML = '<i class="fas fa-spinner fa-spin status-icon"></i><span>Running Simulation...</span>';
-    
-    // Show loading indicator
+
     loadingIndicator.style.display = 'block';
     successMessage.style.display = 'none';
     simulationSummary.style.display = 'none';
     viewExperimentLink.style.display = 'none';
-    
-    // Submit the form via AJAX
+
     const formData = new FormData(this);
-    
+
     fetch(this.action, {
         method: 'POST',
         body: formData
     })
     .then(response => response.json())
     .then(data => {
-        // Hide loading indicator
         loadingIndicator.style.display = 'none';
-        
+
         if (data.status === 'error') {
             throw new Error(data.message);
         }
-        
-        // Update status to completed
+
         simulationStatus.className = 'simulation-status completed';
         simulationStatus.innerHTML = '<i class="fas fa-check-circle status-icon"></i><span>Simulation Complete!</span>';
-        
-        // Show success message
+
         successMessageText.textContent = data.message;
         successMessage.style.display = 'block';
-        
-        // Update and show summary
-        document.getElementById('summary-generator').textContent = document.getElementById('generator-type').options[document.getElementById('generator-type').selectedIndex].text;
+
+        const selectedGeneratorLabel = generatorSelect.options[generatorSelect.selectedIndex].text;
+        document.getElementById('summary-generator').textContent = selectedGeneratorLabel;
         document.getElementById('summary-collisions').textContent = document.getElementById('total-collisions').value;
-        document.getElementById('summary-expressions').textContent = data.initial_expressions || "N/A";
-        document.getElementById('summary-name').textContent = data.experiment_name || "Unnamed";
-        
-        // Set link to view full experiment
+
+        const continuationSummary = data.continuation_summary;
+        const expressionsItem = document.querySelector('[data-summary="expressions"]');
+        const summaryExpressions = document.getElementById('summary-expressions');
+        if (expressionsItem && summaryExpressions) {
+            if (continuationSummary && continuationSummary.parent_config_id) {
+                expressionsItem.style.display = 'none';
+            } else {
+                expressionsItem.style.display = '';
+                const baseCount = (typeof data.initial_expression_count === 'number') ? data.initial_expression_count : 'N/A';
+                summaryExpressions.textContent = baseCount;
+            }
+        }
+
+        document.getElementById('summary-name').textContent = data.experiment_name || 'Unnamed';
+
         viewExperimentLink.href = '/view_experiment/' + data.config_id;
         viewExperimentLink.style.display = 'flex';
-        
-        // Show summary
+
+        const downloadInitialLink = document.getElementById('download-initial-state-link');
+        if (downloadInitialLink) {
+            if (continuationSummary && continuationSummary.parent_config_id && data.download_initial_state_url) {
+                downloadInitialLink.href = data.download_initial_state_url;
+                downloadInitialLink.style.display = 'flex';
+            } else {
+                downloadInitialLink.style.display = 'none';
+            }
+        }
+
         simulationSummary.style.display = 'block';
-        
-        // Scroll to results
+
         document.querySelector('.simulation-results').scrollIntoView({ behavior: 'smooth' });
     })
     .catch(error => {
         loadingIndicator.style.display = 'none';
-        
-        // Update status to error
+
         simulationStatus.className = 'simulation-status error';
         simulationStatus.innerHTML = '<i class="fas fa-exclamation-triangle status-icon"></i><span>Simulation Failed</span>';
-        
+
         console.error('Error:', error);
         alert('Error running simulation: ' + error.message);
     });

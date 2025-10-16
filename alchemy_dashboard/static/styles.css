@@ -1,4 +1,4 @@
-    :root {
+      :root {
       --primary: #4F46E5;
       --primary-light: #6366F1;
       --primary-dark: #4338CA;
@@ -1382,6 +1382,27 @@
       font-size: 0.875rem;
     }
 
+
+    /* ast visualization*/
+    #ast-visualization-container {
+    min-height: 400px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background-color: white;
+    position: relative;
+    overflow: hidden;
+    }
+
+    #ast-visualization-container .bk-root {
+    width: 100% !important;
+    height: 100% !important;
+    }
+
+    #ast-visualization-container .bk-plot {
+    width: 100% !important;
+    height: 100% !important;
+    }
+    
     /* Responsive Design */
     @media (max-width: 1200px) {
       .content-grid {

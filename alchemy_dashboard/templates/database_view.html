@@ -180,6 +180,47 @@
             </div>
         </div>
 
+        <!--- AST section -->
+    
+<div class="card" id="ast-visualization-section" style="margin-top: 2rem;">
+    <div class="card-header">
+        <h3 class="card-title">
+            <i class="fas fa-project-diagram card-title-icon"></i>
+            AST Visualization
+        </h3>
+    </div>
+    <div class="card-body">
+        <div style="margin-bottom: 1rem; padding: 10px; background-color: #f8f9fa; border-radius: 5px; border-left: 4px solid #007bff;">
+            <strong>Note:</strong> Select an expression from the experiment to visualize its AST structure.
+        </div>
+        
+        <form id="ast-form" style="margin-bottom: 1rem;">
+            <div class="form-group">
+                <label for="ast-expression-select">Select Expression:</label>
+                <select id="ast-expression-select" name="expression" class="form-control" style="width: 100%; max-width: 500px;">
+                    <option value="">-- Select an expression --</option>
+                    <!-- Expressions will be populated dynamically -->
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary" disabled id="ast-visualize-btn">
+                <i class="fas fa-eye"></i> Visualize AST
+            </button>
+        </form>
+        
+        <div id="ast-visualization-container" class="chart-container">
+            <!-- AST visualization will be rendered here -->
+            <div style="text-align: center; color: #6c757d; padding: 2rem;">
+                <i class="fas fa-project-diagram" style="font-size: 3rem; margin-bottom: 1rem;"></i>
+                <p>Select an expression above to visualize its AST structure</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+
+
+
         <div id="entropy-details" class="card" style="margin-top: 2rem;">
             <!-- Injected dynamically -->
         </div>
@@ -226,6 +267,7 @@
 {% endblock %}
 
 {% block scripts %}
+{{ bokeh_script|safe }}
 <script>
 // Set the current config ID when the page loads
 window.currentConfigID = {{ experiment.config_id }};
@@ -393,6 +435,9 @@ document.addEventListener("DOMContentLoaded", function() {
             });
         });
     }
+    setTimeout(populateASTExpressions, 500);
+    setupASTVisualization();
+    populateASTExpressions();
 });
 
 if (experimentDropdown) {
@@ -424,6 +469,7 @@ if (experimentDropdown) {
                 } else {
                     console.error("Failed to load plot data");
                 }
+                setTimeout(populateASTExpressions, 100);
             });
 
         // Fetch and update experiment metadata + expressions
@@ -558,5 +604,108 @@ if (histogramForm) {
             });
     });
 }
+
+
+function populateASTExpressions() {
+    const expressionSelect = document.getElementById('ast-expression-select');
+    const expressionList = document.getElementById('initial-expression-list');
+    
+    if (!expressionSelect || !expressionList) return;
+  
+    expressionSelect.innerHTML = '<option value="">-- Select an expression --</option>';
+    
+    
+    const expressionItems = expressionList.querySelectorAll('.lambda-item');
+    expressionItems.forEach(item => {
+        const expression = item.textContent.trim();
+        if (expression) {
+            const option = document.createElement('option');
+            option.value = expression;
+            option.textContent = expression;
+            expressionSelect.appendChild(option);
+        }
+    });
+    
+    console.log(`Populated ${expressionItems.length} expressions for AST visualization`);
+}
+
+
+
+
+// AST fetch
+function setupASTVisualization() {
+    const astForm = document.getElementById('ast-form');
+    const expressionSelect = document.getElementById('ast-expression-select');
+    const visualizeBtn = document.getElementById('ast-visualize-btn');
+    const container = document.getElementById('ast-visualization-container');
+
+    if (!astForm || !expressionSelect) return;
+
+  
+    expressionSelect.addEventListener('change', function() {
+        if (visualizeBtn) {
+            visualizeBtn.disabled = !this.value;
+        }
+    });
+
+
+    astForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const expression = expressionSelect.value;
+        
+        if (!expression) return;
+
+   
+        container.innerHTML = `
+            <div style="text-align: center; padding: 2rem;">
+                <i class="fas fa-spinner fa-spin"></i>
+                <p>Generating AST visualization...</p>
+            </div>
+        `;
+
+        fetch('/visualize_ast', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: `expression=${encodeURIComponent(expression)}`
+        })
+        .then(res => res.json())
+        .then(data => {
+          const container = document.getElementById('ast-visualization-container');
+
+    if (data.status === 'success') {
+ 
+        container.innerHTML = '';
+        
+   
+        container.innerHTML = data.div; 
+
+        const script = document.createElement('script');
+        script.textContent = data.script;
+
+        const existingScript = document.getElementById('bokeh-plot-script');
+        if (existingScript) {
+            existingScript.remove();
+        }
+        
+        script.id = 'bokeh-plot-script';
+        
+    
+        document.body.appendChild(script);
+
+        window.dispatchEvent(new Event('resize'));
+        
+        console.log('AST visualization rendered successfully');
+    } else {
+        container.innerHTML = `<div class=\"alert alert-error\">${data.message}</div>`;
+    }
+})
+
+        .catch(err => {
+            console.error('Error generating visualization:', err);
+            container.innerHTML = `<div class="alert alert-error">Error generating visualization: ${err.message}</div>`;
+        });
+    });
+}
+
 </script>
 {% endblock %} 

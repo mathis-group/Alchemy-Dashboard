@@ -81,8 +81,6 @@ alchemy_dashboard/
 
    ```bash
    uv run python -m alchemy_dashboard.main
-   # or serve via Bokeh:
-   uv run bokeh serve alchemy_dashboard --show
    ```
 
    `uv sync` reads `pyproject.toml`, installs the required packages, and keeps `.venv` reproducible for teammates.

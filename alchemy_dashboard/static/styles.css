@@ -611,6 +611,71 @@
       line-height: 1.5;
     }
     
+    .lambda-wrapper {
+      position: relative;
+      overflow: hidden;
+      transition: max-height 0.3s ease;
+    }
+
+    .lambda-wrapper.collapsed {
+      max-height: 240px;
+    }
+
+    .lambda-wrapper.expanded {
+      max-height: none;
+    }
+
+    .lambda-wrapper .lambda-fade {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 64px;
+      background: linear-gradient(180deg, rgba(248, 250, 252, 0) 0%, rgba(248, 250, 252, 1) 75%);
+      pointer-events: none;
+    }
+
+    .lambda-wrapper.expanded .lambda-fade {
+      display: none;
+    }
+
+    .expression-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      color: var(--primary);
+      font-weight: 500;
+      cursor: pointer;
+      text-decoration: none;
+      transition: color 0.2s ease;
+      background: none;
+      border: none;
+      padding: 0;
+    }
+
+    .expression-link:hover {
+      color: var(--primary-dark);
+    }
+
+    .expression-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+
+    .chart-placeholder {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 220px;
+      color: var(--text-secondary);
+      font-style: italic;
+      background-color: #F8FAFC;
+      border-radius: 0.75rem;
+      border: 1px dashed var(--border);
+    }
+
     /* Lambda Expressions List */
     .lambda-list {
       list-style-type: none;

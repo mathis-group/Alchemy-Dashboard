@@ -142,7 +142,7 @@
             </div>
             <div class="card-body">
                 <div class="chart-container" id="entropy-plots-container">
-                    {{ bokeh_div | safe }}
+                    <div class="chart-placeholder">Select an experiment to visualize entropy.</div>
                 </div>
             </div>
         </div>
@@ -156,7 +156,7 @@
             </div>
             <div class="card-body">
                 <div class="chart-container" id="unique-expressions-plots-container">
-                    {{ unique_expressions_div | safe }}
+                    <div class="chart-placeholder">Select an experiment to visualize unique expressions.</div>
                 </div>
             </div>
         </div>
@@ -267,7 +267,6 @@
 {% endblock %}
 
 {% block scripts %}
-{{ bokeh_script|safe }}
 <script>
 // Set the current config ID when the page loads
 window.currentConfigID = {{ experiment.config_id }};
@@ -278,6 +277,71 @@ const expressionsWrapper = document.getElementById('initial-expressions-wrapper'
 const toggleExpressionsButton = document.getElementById('toggle-expressions-btn');
 const downloadExpressionsLink = document.getElementById('download-expressions-link');
 const expressionListElement = document.getElementById('initial-expression-list');
+const entropyPlotsContainer = document.getElementById('entropy-plots-container');
+const uniqueExpressionsPlotsContainer = document.getElementById('unique-expressions-plots-container');
+const statusMessage = document.querySelector('.status-message');
+
+function clearBokehComponentScripts() {
+    document.querySelectorAll('script[data-bokeh-component]')
+        .forEach(script => script.remove());
+}
+
+function setChartPlaceholders(message) {
+    if (entropyPlotsContainer) {
+        entropyPlotsContainer.innerHTML = `<div class="chart-placeholder">${message}</div>`;
+    }
+    if (uniqueExpressionsPlotsContainer) {
+        uniqueExpressionsPlotsContainer.innerHTML = `<div class="chart-placeholder">${message}</div>`;
+    }
+}
+
+function renderExperimentPlots(configId) {
+    if (!entropyPlotsContainer || !uniqueExpressionsPlotsContainer) {
+        return;
+    }
+
+    if (!configId || Number(configId) <= 0) {
+        clearBokehComponentScripts();
+        setChartPlaceholders('Select an experiment to visualize charts.');
+        return;
+    }
+
+    clearBokehComponentScripts();
+    entropyPlotsContainer.innerHTML = '<div class="chart-placeholder">Loading entropy plot…</div>';
+    uniqueExpressionsPlotsContainer.innerHTML = '<div class="chart-placeholder">Loading unique expressions plot…</div>';
+
+    fetch(`/get_experiment_plot/${configId}`)
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === "success") {
+                entropyPlotsContainer.innerHTML = data.entropy_div || '<div class="chart-placeholder">No entropy data available.</div>';
+                uniqueExpressionsPlotsContainer.innerHTML = data.unique_expressions_div || '<div class="chart-placeholder">No unique expressions data available.</div>';
+
+                if (data.entropy_script) {
+                    const entropyScript = document.createElement('script');
+                    entropyScript.type = 'text/javascript';
+                    entropyScript.dataset.bokehComponent = 'true';
+                    entropyScript.textContent = data.entropy_script;
+                    document.body.appendChild(entropyScript);
+                }
+                if (data.unique_expressions_script) {
+                    const uniqueScript = document.createElement('script');
+                    uniqueScript.type = 'text/javascript';
+                    uniqueScript.dataset.bokehComponent = 'true';
+                    uniqueScript.textContent = data.unique_expressions_script;
+                    document.body.appendChild(uniqueScript);
+                }
+            } else {
+                console.error("Failed to load plot data");
+                setChartPlaceholders('Unable to load charts for the selected experiment.');
+            }
+            setTimeout(populateASTExpressions, 100);
+        })
+        .catch(err => {
+            console.error('Error retrieving plots:', err);
+            setChartPlaceholders('Unable to load charts for the selected experiment.');
+        });
+}
 
 function updateDeleteButtonState() {
     if (!deleteExperimentButton || !experimentDropdown) {
@@ -353,6 +417,7 @@ document.addEventListener("DOMContentLoaded", function() {
     }
 
     resetExpressionsView();
+    renderExperimentPlots(window.currentConfigID);
 
     fetch('/list_experiments')
         .then(response => response.json())
@@ -365,11 +430,15 @@ document.addEventListener("DOMContentLoaded", function() {
                         `${exp.name} (ID: ${exp.config_id})` : 
                         `Experiment ${exp.config_id}: ${exp.generator_type}`;
                     option.textContent = displayName;
+                    if (String(exp.config_id) === String(window.currentConfigID)) {
+                        option.selected = true;
+                    }
                     experimentDropdown.appendChild(option);
                 });
-                
-                // Show success message
-                document.querySelector('.status-message').style.display = 'block';
+
+                if (statusMessage) {
+                    statusMessage.style.display = 'block';
+                }
             }
             updateDeleteButtonState();
         });
@@ -437,6 +506,7 @@ document.addEventListener("DOMContentLoaded", function() {
     }
     setTimeout(populateASTExpressions, 500);
     setupASTVisualization();
+
     populateASTExpressions();
 });
 
@@ -445,32 +515,7 @@ if (experimentDropdown) {
         const experimentId = this.value;
         window.currentConfigID = experimentId;
         updateDeleteButtonState();
-
-        // Fetch and update Bokeh visualizations
-        fetch(`/get_experiment_plot/${experimentId}`)
-            .then(res => res.json())
-            .then(data => {
-                if (data.status === "success") {
-                    const entropyPlotsContainer = document.getElementById('entropy-plots-container');
-                    entropyPlotsContainer.innerHTML = data.entropy_div;
-
-                    const uniqueExpressionsPlotsContainer = document.getElementById('unique-expressions-plots-container');
-                    uniqueExpressionsPlotsContainer.innerHTML = data.unique_expressions_div;
-
-                    const entropyScript = document.createElement("script");
-                    entropyScript.type = "text/javascript";
-                    entropyScript.textContent = data.entropy_script;
-                    document.body.appendChild(entropyScript);
-
-                    const uniqueExpressionsScript = document.createElement("script");
-                    uniqueExpressionsScript.type = "text/javascript";
-                    uniqueExpressionsScript.textContent = data.unique_expressions_script;
-                    document.body.appendChild(uniqueExpressionsScript);
-                } else {
-                    console.error("Failed to load plot data");
-                }
-                setTimeout(populateASTExpressions, 100);
-            });
+        renderExperimentPlots(experimentId);
 
         // Fetch and update experiment metadata + expressions
         fetch(`/get_experiment_metadata/${experimentId}`)

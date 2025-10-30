@@ -4,7 +4,7 @@ import sqlite3
 import json
 import os
 from datetime import datetime
-from config import DB_NAME
+from .config import DB_NAME
 
 from sqlalchemy import Column, Integer, Float, String, ForeignKey, DateTime, create_engine
 

@@ -5,7 +5,7 @@ from collections import Counter
 from flask import Flask, render_template, request, redirect, url_for, jsonify, send_file
 from bokeh.resources import CDN
 from simulation import run_experiment
-from plotting import get_simulation_components, plot_experiment_metrics
+from plotting import get_simulation_components, plot_experiment_metrics, ASTvisualizer, ASTErr
 from models import (
     init_database,
     save_configuration,
@@ -24,9 +24,10 @@ from db_utils import (
     get_expressions_for_collision
 )
 from plotting import create_bokeh_plots_from_metrics
+from ASTGen import LambdaParser,VariableNode, LambdaNode, getColors
 import re
 from werkzeug.utils import secure_filename
-from bokeh.embed import components
+from bokeh.embed import components, json_item
 
 app = Flask(__name__)
 
@@ -140,6 +141,40 @@ def database_view():
 @app.route('/simulation')
 def simulation():
     return render_template('simulation.html', active_page='simulation')
+
+
+
+
+#===ast visualizer ====
+@app.route('/visualize_ast', methods=['POST'])
+def visualize_ast():
+    
+    try:
+        expression = request.form.get('expression')
+        if not expression:
+            return jsonify({'status': 'error', 'message': 'No expression provided.'}), 400
+
+       
+        plot_object = ASTvisualizer(expression)
+        
+ 
+        script, div = components(plot_object)
+
+  
+        clean_script = re.sub(r'<script[^>]*>', '', script)
+        clean_script = clean_script.replace("</script>", "")
+
+        return jsonify({
+            'status': 'success',
+            'div': div,
+            'script': clean_script  
+        })
+
+    except Exception as e:
+        error_message = f"Error generating visualization: {str(e)}"
+        print(f"[ERROR] {error_message}")
+        return jsonify({ 'status': 'error', 'message': error_message }), 500
+    
 
 
 @app.route('/api/continuation_config/<int:config_id>')
@@ -470,7 +505,7 @@ def run_simulation_form():
             df = process_collision_data(metrics)
             
             # Generate charts
-            from bokeh.embed import components
+            from bokeh.embed import components, json_item
             from plotting import plot_experiment_metrics
             
             plots = plot_experiment_metrics(df)

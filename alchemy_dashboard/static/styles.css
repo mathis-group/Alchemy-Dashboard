@@ -611,6 +611,71 @@
       line-height: 1.5;
     }
     
+    .lambda-wrapper {
+      position: relative;
+      overflow: hidden;
+      transition: max-height 0.3s ease;
+    }
+
+    .lambda-wrapper.collapsed {
+      max-height: 240px;
+    }
+
+    .lambda-wrapper.expanded {
+      max-height: none;
+    }
+
+    .lambda-wrapper .lambda-fade {
+      position: absolute;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      height: 64px;
+      background: linear-gradient(180deg, rgba(248, 250, 252, 0) 0%, rgba(248, 250, 252, 1) 75%);
+      pointer-events: none;
+    }
+
+    .lambda-wrapper.expanded .lambda-fade {
+      display: none;
+    }
+
+    .expression-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      color: var(--primary);
+      font-weight: 500;
+      cursor: pointer;
+      text-decoration: none;
+      transition: color 0.2s ease;
+      background: none;
+      border: none;
+      padding: 0;
+    }
+
+    .expression-link:hover {
+      color: var(--primary-dark);
+    }
+
+    .expression-toolbar {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 1rem;
+    }
+
+    .chart-placeholder {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 220px;
+      color: var(--text-secondary);
+      font-style: italic;
+      background-color: #F8FAFC;
+      border-radius: 0.75rem;
+      border: 1px dashed var(--border);
+    }
+
     /* Lambda Expressions List */
     .lambda-list {
       list-style-type: none;
@@ -1382,6 +1447,27 @@
       font-size: 0.875rem;
     }
 
+
+    /* ast visualization*/
+    #ast-visualization-container {
+    min-height: 400px;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    background-color: white;
+    position: relative;
+    overflow: hidden;
+    }
+
+    #ast-visualization-container .bk-root {
+    width: 100% !important;
+    height: 100% !important;
+    }
+
+    #ast-visualization-container .bk-plot {
+    width: 100% !important;
+    height: 100% !important;
+    }
+    
     /* Responsive Design */
     @media (max-width: 1200px) {
       .content-grid {

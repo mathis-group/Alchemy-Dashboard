@@ -40,66 +40,79 @@ alchemy_dashboard/
 ## Prerequisites
 
 - **Rust toolchain** (stable) with `cargo` installed: <https://rustup.rs>
-- **Python 3.7+** (3.8+ recommended)
-- **Pip / build tools** (the core uses **maturin** to build the Rust library as a Python package)
-- **Python libraries:** `bokeh`, `numpy` (plus standard library `sqlite3` for SQLite).
+- **Python 3.10+** (3.11 recommended)
+- **[uv](https://docs.astral.sh/uv/)** package manager (`pip install uv` or `brew install uv`)
+- **maturin** (installed in the setup steps) to build the Rust extension
 
 
 ---
 
 ## Quickstart
 
-### 1) Clone
+### Recommended: uv-managed setup
 
-```bash
-git clone https://github.com/jjoseph12/AlChemy_Chemistry.git
-cd AlChemy_Chemistry
-```
+1. **Clone the repository**
 
-### 2) Create & activate a virtual environment
+   ```bash
+   git clone https://github.com/jjoseph12/AlChemy_Chemistry.git
+   cd AlChemy_Chemistry
+   ```
 
-```bash
-python3 -m venv venv
-source venv/bin/activate          # Windows: venv\Scripts\activate
-python -m pip install --upgrade pip
-```
+2. **Create the virtualenv and install dependencies with uv**
 
-### 3) Build & install the Rust core (via maturin)
+   ```bash
+   # Optional: install a specific Python version
+   uv python install 3.11
 
-Install maturin and build from the Rust crate directory (adjust `-m` if your `Cargo.toml` lives elsewhere).
+   # Create .venv and resolve dependencies listed in pyproject.toml
+   uv venv
+   source .venv/bin/activate          # Windows: .venv\Scripts\activate
+   uv sync --dev                      # runtime deps + maturin
+   ```
 
-```bash
-pip install maturin
-# from the crate root (where Cargo.toml is located):
-maturin develop --release
-```
+3. **Build & install the Rust chemistry core**
 
-This compiles the Rust code into a Python extension module and installs it into your active environment so the dashboard can import it (e.g., `import alchemy` or your chosen package name).
+   ```bash
+   # run from the Rust crate directory (where Cargo.toml lives)
+   uv run maturin develop --release
+   ```
 
-### 4) Install Python runtime deps
+4. **Launch the dashboard**
 
- minimally:
-```bash
-pip install bokeh numpy
-```
+   ```bash
+   uv run python -m alchemy_dashboard.main
+   ```
 
-### 5) Run the dashboard
+   `uv sync` reads `pyproject.toml`, installs the required packages, and keeps `.venv` reproducible for teammates.
 
-Depending on how your app is structured, use one of the following patterns:
+### Alternative: pip-based workflow
 
-**Option A: Bokeh server app directory**
-```bash
-bokeh serve alchemy_dashboard --show
-```
+If you'd rather stick with vanilla `pip`:
 
-**Option B: Python entrypoint**
-```bash
-python -m alchemy_dashboard.main
-# or, if main.py is runnable directly:
-python alchemy_dashboard/main.py
-```
+1. **Create & activate a virtualenv**
 
-The app will open in your browser and allow you to select or upload configs (e.g., from `uploaded_configs/`), launch simulations, and explore interactive plots.
+   ```bash
+   python3 -m venv venv
+   source venv/bin/activate          # Windows: venv\Scripts\activate
+   python -m pip install --upgrade pip
+   ```
+
+2. **Install tooling & dependencies**
+
+   ```bash
+   pip install maturin
+   pip install flask bokeh pandas sqlalchemy
+   ```
+
+3. **Build & run**
+
+   ```bash
+   maturin develop --release
+   python -m alchemy_dashboard.main
+   # or: bokeh serve alchemy_dashboard --show
+   ```
+
+The dashboard will open in your browser and allow you to select or upload configs (e.g., from `uploaded_configs/`), launch simulations, and explore interactive plots.
 
 ---
 

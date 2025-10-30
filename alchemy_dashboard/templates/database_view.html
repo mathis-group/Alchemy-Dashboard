@@ -142,7 +142,7 @@
             </div>
             <div class="card-body">
                 <div class="chart-container" id="entropy-plots-container">
-                    {{ bokeh_div | safe }}
+                    <div class="chart-placeholder">Select an experiment to visualize entropy.</div>
                 </div>
             </div>
         </div>
@@ -156,7 +156,7 @@
             </div>
             <div class="card-body">
                 <div class="chart-container" id="unique-expressions-plots-container">
-                    {{ unique_expressions_div | safe }}
+                    <div class="chart-placeholder">Select an experiment to visualize unique expressions.</div>
                 </div>
             </div>
         </div>
@@ -179,6 +179,47 @@
                 <div id="histogram-content"></div>
             </div>
         </div>
+
+        <!--- AST section -->
+    
+<div class="card" id="ast-visualization-section" style="margin-top: 2rem;">
+    <div class="card-header">
+        <h3 class="card-title">
+            <i class="fas fa-project-diagram card-title-icon"></i>
+            AST Visualization
+        </h3>
+    </div>
+    <div class="card-body">
+        <div style="margin-bottom: 1rem; padding: 10px; background-color: #f8f9fa; border-radius: 5px; border-left: 4px solid #007bff;">
+            <strong>Note:</strong> Select an expression from the experiment to visualize its AST structure.
+        </div>
+        
+        <form id="ast-form" style="margin-bottom: 1rem;">
+            <div class="form-group">
+                <label for="ast-expression-select">Select Expression:</label>
+                <select id="ast-expression-select" name="expression" class="form-control" style="width: 100%; max-width: 500px;">
+                    <option value="">-- Select an expression --</option>
+                    <!-- Expressions will be populated dynamically -->
+                </select>
+            </div>
+            <button type="submit" class="btn btn-primary" disabled id="ast-visualize-btn">
+                <i class="fas fa-eye"></i> Visualize AST
+            </button>
+        </form>
+        
+        <div id="ast-visualization-container" class="chart-container">
+            <!-- AST visualization will be rendered here -->
+            <div style="text-align: center; color: #6c757d; padding: 2rem;">
+                <i class="fas fa-project-diagram" style="font-size: 3rem; margin-bottom: 1rem;"></i>
+                <p>Select an expression above to visualize its AST structure</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+
+
 
         <div id="entropy-details" class="card" style="margin-top: 2rem;">
             <!-- Injected dynamically -->
@@ -236,6 +277,71 @@ const expressionsWrapper = document.getElementById('initial-expressions-wrapper'
 const toggleExpressionsButton = document.getElementById('toggle-expressions-btn');
 const downloadExpressionsLink = document.getElementById('download-expressions-link');
 const expressionListElement = document.getElementById('initial-expression-list');
+const entropyPlotsContainer = document.getElementById('entropy-plots-container');
+const uniqueExpressionsPlotsContainer = document.getElementById('unique-expressions-plots-container');
+const statusMessage = document.querySelector('.status-message');
+
+function clearBokehComponentScripts() {
+    document.querySelectorAll('script[data-bokeh-component]')
+        .forEach(script => script.remove());
+}
+
+function setChartPlaceholders(message) {
+    if (entropyPlotsContainer) {
+        entropyPlotsContainer.innerHTML = `<div class="chart-placeholder">${message}</div>`;
+    }
+    if (uniqueExpressionsPlotsContainer) {
+        uniqueExpressionsPlotsContainer.innerHTML = `<div class="chart-placeholder">${message}</div>`;
+    }
+}
+
+function renderExperimentPlots(configId) {
+    if (!entropyPlotsContainer || !uniqueExpressionsPlotsContainer) {
+        return;
+    }
+
+    if (!configId || Number(configId) <= 0) {
+        clearBokehComponentScripts();
+        setChartPlaceholders('Select an experiment to visualize charts.');
+        return;
+    }
+
+    clearBokehComponentScripts();
+    entropyPlotsContainer.innerHTML = '<div class="chart-placeholder">Loading entropy plot…</div>';
+    uniqueExpressionsPlotsContainer.innerHTML = '<div class="chart-placeholder">Loading unique expressions plot…</div>';
+
+    fetch(`/get_experiment_plot/${configId}`)
+        .then(res => res.json())
+        .then(data => {
+            if (data.status === "success") {
+                entropyPlotsContainer.innerHTML = data.entropy_div || '<div class="chart-placeholder">No entropy data available.</div>';
+                uniqueExpressionsPlotsContainer.innerHTML = data.unique_expressions_div || '<div class="chart-placeholder">No unique expressions data available.</div>';
+
+                if (data.entropy_script) {
+                    const entropyScript = document.createElement('script');
+                    entropyScript.type = 'text/javascript';
+                    entropyScript.dataset.bokehComponent = 'true';
+                    entropyScript.textContent = data.entropy_script;
+                    document.body.appendChild(entropyScript);
+                }
+                if (data.unique_expressions_script) {
+                    const uniqueScript = document.createElement('script');
+                    uniqueScript.type = 'text/javascript';
+                    uniqueScript.dataset.bokehComponent = 'true';
+                    uniqueScript.textContent = data.unique_expressions_script;
+                    document.body.appendChild(uniqueScript);
+                }
+            } else {
+                console.error("Failed to load plot data");
+                setChartPlaceholders('Unable to load charts for the selected experiment.');
+            }
+            setTimeout(populateASTExpressions, 100);
+        })
+        .catch(err => {
+            console.error('Error retrieving plots:', err);
+            setChartPlaceholders('Unable to load charts for the selected experiment.');
+        });
+}
 
 function updateDeleteButtonState() {
     if (!deleteExperimentButton || !experimentDropdown) {
@@ -311,6 +417,7 @@ document.addEventListener("DOMContentLoaded", function() {
     }
 
     resetExpressionsView();
+    renderExperimentPlots(window.currentConfigID);
 
     fetch('/list_experiments')
         .then(response => response.json())
@@ -323,11 +430,15 @@ document.addEventListener("DOMContentLoaded", function() {
                         `${exp.name} (ID: ${exp.config_id})` : 
                         `Experiment ${exp.config_id}: ${exp.generator_type}`;
                     option.textContent = displayName;
+                    if (String(exp.config_id) === String(window.currentConfigID)) {
+                        option.selected = true;
+                    }
                     experimentDropdown.appendChild(option);
                 });
-                
-                // Show success message
-                document.querySelector('.status-message').style.display = 'block';
+
+                if (statusMessage) {
+                    statusMessage.style.display = 'block';
+                }
             }
             updateDeleteButtonState();
         });
@@ -393,6 +504,10 @@ document.addEventListener("DOMContentLoaded", function() {
             });
         });
     }
+    setTimeout(populateASTExpressions, 500);
+    setupASTVisualization();
+
+    populateASTExpressions();
 });
 
 if (experimentDropdown) {
@@ -400,31 +515,7 @@ if (experimentDropdown) {
         const experimentId = this.value;
         window.currentConfigID = experimentId;
         updateDeleteButtonState();
-
-        // Fetch and update Bokeh visualizations
-        fetch(`/get_experiment_plot/${experimentId}`)
-            .then(res => res.json())
-            .then(data => {
-                if (data.status === "success") {
-                    const entropyPlotsContainer = document.getElementById('entropy-plots-container');
-                    entropyPlotsContainer.innerHTML = data.entropy_div;
-
-                    const uniqueExpressionsPlotsContainer = document.getElementById('unique-expressions-plots-container');
-                    uniqueExpressionsPlotsContainer.innerHTML = data.unique_expressions_div;
-
-                    const entropyScript = document.createElement("script");
-                    entropyScript.type = "text/javascript";
-                    entropyScript.textContent = data.entropy_script;
-                    document.body.appendChild(entropyScript);
-
-                    const uniqueExpressionsScript = document.createElement("script");
-                    uniqueExpressionsScript.type = "text/javascript";
-                    uniqueExpressionsScript.textContent = data.unique_expressions_script;
-                    document.body.appendChild(uniqueExpressionsScript);
-                } else {
-                    console.error("Failed to load plot data");
-                }
-            });
+        renderExperimentPlots(experimentId);
 
         // Fetch and update experiment metadata + expressions
         fetch(`/get_experiment_metadata/${experimentId}`)
@@ -558,5 +649,108 @@ if (histogramForm) {
             });
     });
 }
+
+
+function populateASTExpressions() {
+    const expressionSelect = document.getElementById('ast-expression-select');
+    const expressionList = document.getElementById('initial-expression-list');
+    
+    if (!expressionSelect || !expressionList) return;
+  
+    expressionSelect.innerHTML = '<option value="">-- Select an expression --</option>';
+    
+    
+    const expressionItems = expressionList.querySelectorAll('.lambda-item');
+    expressionItems.forEach(item => {
+        const expression = item.textContent.trim();
+        if (expression) {
+            const option = document.createElement('option');
+            option.value = expression;
+            option.textContent = expression;
+            expressionSelect.appendChild(option);
+        }
+    });
+    
+    console.log(`Populated ${expressionItems.length} expressions for AST visualization`);
+}
+
+
+
+
+// AST fetch
+function setupASTVisualization() {
+    const astForm = document.getElementById('ast-form');
+    const expressionSelect = document.getElementById('ast-expression-select');
+    const visualizeBtn = document.getElementById('ast-visualize-btn');
+    const container = document.getElementById('ast-visualization-container');
+
+    if (!astForm || !expressionSelect) return;
+
+  
+    expressionSelect.addEventListener('change', function() {
+        if (visualizeBtn) {
+            visualizeBtn.disabled = !this.value;
+        }
+    });
+
+
+    astForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const expression = expressionSelect.value;
+        
+        if (!expression) return;
+
+   
+        container.innerHTML = `
+            <div style="text-align: center; padding: 2rem;">
+                <i class="fas fa-spinner fa-spin"></i>
+                <p>Generating AST visualization...</p>
+            </div>
+        `;
+
+        fetch('/visualize_ast', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: `expression=${encodeURIComponent(expression)}`
+        })
+        .then(res => res.json())
+        .then(data => {
+          const container = document.getElementById('ast-visualization-container');
+
+    if (data.status === 'success') {
+ 
+        container.innerHTML = '';
+        
+   
+        container.innerHTML = data.div; 
+
+        const script = document.createElement('script');
+        script.textContent = data.script;
+
+        const existingScript = document.getElementById('bokeh-plot-script');
+        if (existingScript) {
+            existingScript.remove();
+        }
+        
+        script.id = 'bokeh-plot-script';
+        
+    
+        document.body.appendChild(script);
+
+        window.dispatchEvent(new Event('resize'));
+        
+        console.log('AST visualization rendered successfully');
+    } else {
+        container.innerHTML = `<div class=\"alert alert-error\">${data.message}</div>`;
+    }
+})
+
+        .catch(err => {
+            console.error('Error generating visualization:', err);
+            container.innerHTML = `<div class="alert alert-error">Error generating visualization: ${err.message}</div>`;
+        });
+    });
+}
+
 </script>
 {% endblock %} 

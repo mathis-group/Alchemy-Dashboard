@@ -4,7 +4,7 @@ from bokeh.plotting import figure
 from bokeh.layouts import column, row
 from bokeh.models import ColumnDataSource, HoverTool, Legend, Circle, LabelSet
 from bokeh.embed import components
-from ASTGen import LambdaParser, VariableNode, LambdaNode, getColors
+from .ASTGen import LambdaParser, VariableNode, LambdaNode, getColors
 import pandas as pd
 import json
 
@@ -479,7 +479,7 @@ import pandas as pd
 import sqlite3
 from bokeh.plotting import figure
 from bokeh.embed import components
-from config import DB_NAME
+from .config import DB_NAME
 
 # === Data Query Function ===
 def query_df_by_config_id(config_id):
@@ -596,6 +596,8 @@ def ASTvisualizer(expression):
                 'color': nodeColor,
                 'children': getattr(node, 'children', [])
             })
+            if len('children')==0:
+                    return
             
             """plotly equivalent:
             lay = G.layout('rt') 
@@ -629,7 +631,7 @@ def ASTvisualizer(expression):
                 childY = node['y'] - 2
                 """ plotly equivalent: 
                     fig.add_trace(go.Scatter(x=Xe, y=Ye, mode='lines')) """
-                p.line([node['x'], childX], [node['y'], childY], line_width=2, color=GRID_COLOR, line_alpha=0.6)
+                p.line([node['x'], childX], [node['y'], childY], line_width=3, color='#000000', line_alpha=0.6)
         
         """ plotly equivalent:  
             Xn = [position[k][0] for k in range(L)]

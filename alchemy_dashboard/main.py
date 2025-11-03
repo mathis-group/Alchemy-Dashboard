@@ -4,9 +4,9 @@ import io
 from collections import Counter
 from flask import Flask, render_template, request, redirect, url_for, jsonify, send_file
 from bokeh.resources import CDN
-from simulation import run_experiment
-from plotting import get_simulation_components, plot_experiment_metrics, ASTvisualizer, ASTErr
-from models import (
+from .simulation import run_experiment
+from .plotting import get_simulation_components, plot_experiment_metrics, ASTvisualizer, ASTErr
+from .models import (
     init_database,
     save_configuration,
     save_experiment_state,
@@ -17,14 +17,14 @@ from models import (
     update_experiment_name,
     delete_experiment
 )
-from db_utils import (
+from .db_utils import (
     get_experiment_details, 
     process_collision_data,
     get_experiment_metrics,
     get_expressions_for_collision
 )
-from plotting import create_bokeh_plots_from_metrics
-from ASTGen import LambdaParser,VariableNode, LambdaNode, getColors
+from .plotting import create_bokeh_plots_from_metrics
+from .ASTGen import LambdaParser,VariableNode, LambdaNode, getColors
 import re
 from werkzeug.utils import secure_filename
 from bokeh.embed import components, json_item
@@ -506,7 +506,7 @@ def run_simulation_form():
             
             # Generate charts
             from bokeh.embed import components, json_item
-            from plotting import plot_experiment_metrics
+            from .plotting import plot_experiment_metrics
             
             plots = plot_experiment_metrics(df)
             
@@ -572,7 +572,7 @@ def view_experiment(config_id):
     df = process_collision_data(metrics)
     
     # Create plots
-    from plotting import plot_experiment_metrics
+    from .plotting import plot_experiment_metrics
     from bokeh.embed import components
     
     plots = plot_experiment_metrics(df)
@@ -647,7 +647,7 @@ def generate_visuals(filename):
             data = json.load(f)
         if "collisions_data" not in data:
             return jsonify({'status': 'error', 'message': "Missing 'collisions_data' in file."})
-        from plotting import create_bokeh_from_data
+        from .plotting import create_bokeh_from_data
         script, div = create_bokeh_from_data(data)
         return jsonify({'status': 'success', 'script': script, 'div': div})
     except json.JSONDecodeError as je:
@@ -741,7 +741,7 @@ def compare_experiments():
         metric_data = get_experiment_metrics(config_ids, metric)
         
         # Create comparison plot
-        from plotting import plot_comparison_metrics
+        from .plotting import plot_comparison_metrics
         from bokeh.embed import components
         
         comparison_plot = plot_comparison_metrics(metric_data, metric)
@@ -764,7 +764,7 @@ def compare_experiments():
         return render_template('compare_experiments.html', experiments=experiments)
 
 from flask import jsonify
-from plotting import generate_bokeh_components  # or whatever file you use
+from .plotting import generate_bokeh_components  # or whatever file you use
 
 @app.route('/get_experiment_plot/<int:config_id>')
 def get_experiment_plot(config_id):
@@ -779,7 +779,7 @@ def get_experiment_plot(config_id):
         df = process_collision_data(metrics)
         
         # Generate plots
-        from plotting import plot_experiment_metrics
+        from .plotting import plot_experiment_metrics
         from bokeh.embed import components
         
         plots = plot_experiment_metrics(df)
@@ -806,7 +806,7 @@ def get_experiment_plot(config_id):
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
-from db_utils import get_experiment_details_and_expressions  # or equivalent
+from .db_utils import get_experiment_details_and_expressions  # or equivalent
 
 @app.route('/get_experiment_metadata/<int:config_id>')
 def get_experiment_metadata(config_id):
@@ -850,7 +850,7 @@ def get_experiment_metadata(config_id):
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
-from db_utils import get_entropy_and_histogram
+from .db_utils import get_entropy_and_histogram
 from bokeh.plotting import figure
 from bokeh.embed import components
 
@@ -976,3 +976,4 @@ def dashboard():
 
 if __name__ == '__main__':
     app.run(debug=True)
+

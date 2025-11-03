@@ -4,7 +4,7 @@ import os
 import alchemy
 import random
 from collections import Counter
-from db_utils import get_expressions_for_collision
+from. db_utils import get_expressions_for_collision
 
 def load_input_expressions(generator_type, gen_params):
     """

@@ -6,8 +6,8 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "flask>=3.0",
-	#should allow 2.9<, >4.0
-    "bokeh~=3.0",
+
+    "bokeh==3.6.3",
     "pandas>=2.1",
     "sqlalchemy>=2.0",
 ]

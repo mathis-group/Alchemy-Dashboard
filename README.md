@@ -54,8 +54,8 @@ alchemy_dashboard/
 1. **Clone the repository**
 
    ```bash
-   git clone https://github.com/jjoseph12/AlChemy_Chemistry.git
-   cd AlChemy_Chemistry
+   git clone https://github.com/jjoseph12/Alchemy-Dashboard.git
+   cd Alchemy-Dashboard
    ```
 
 2. **Create the virtualenv and install dependencies with uv**
@@ -67,7 +67,7 @@ alchemy_dashboard/
    # Create .venv and resolve dependencies listed in pyproject.toml
    uv venv
    source .venv/bin/activate          # Windows: .venv\Scripts\activate
-   uv sync --dev                      # runtime deps + maturin
+   uv sync --dev                      
    ```
 
 3. **Build & install the Rust chemistry core**
@@ -80,6 +80,11 @@ alchemy_dashboard/
 4. **Launch the dashboard**
 
    ```bash
+   #install rust crate directly into dashboard venv
+   uv run --with maturin maturin develop --release \
+  --manifest-path /Users/jjoseph/Desktop/Modern-AlChemy/Cargo.toml
+  
+   # start dashboard
    uv run python -m alchemy_dashboard.main
    ```
 

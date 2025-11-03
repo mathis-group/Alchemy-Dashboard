@@ -81,9 +81,8 @@ alchemy_dashboard/
 
    ```bash
    #install rust crate directly into dashboard venv
-   uv run --with maturin maturin develop --release \
-  --manifest-path /Users/jjoseph/Desktop/Modern-AlChemy/Cargo.toml
-  
+   uv run --with maturin maturin develop --release \ --manifest-path /Users/jjoseph/Desktop/Modern-AlChemy/Cargo.toml
+
    # start dashboard
    uv run python -m alchemy_dashboard.main
    ```

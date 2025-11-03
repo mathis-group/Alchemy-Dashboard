@@ -73,6 +73,9 @@ alchemy_dashboard/
 3. **Build & install the Rust chemistry core**
 
    ```bash
+   # go to modern alchemy and download
+   git clone https://github.com/mathis-group/Modern-AlChemy.git
+   
    # run from the Rust crate directory (where Cargo.toml lives)
    uv run maturin develop --release
    ```

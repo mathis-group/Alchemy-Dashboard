@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "alchemy-dashboard"
 version = "0.1.0"
@@ -6,15 +10,12 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "flask>=3.0",
-
     "bokeh==3.6.3",
     "pandas>=2.1",
     "sqlalchemy>=2.0",
 ]
-
 [tool.uv]
 package = true
-dev-dependencies = [
-    "maturin>=1.6",
-]
 
+[dependency-groups]
+dev = ["maturin>=1.6"]

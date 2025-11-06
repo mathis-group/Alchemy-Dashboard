@@ -405,18 +405,22 @@ def run_simulation_form():
             abs_high = float(request.form.get('abs_high', 0.5))
             app_low = float(request.form.get('app_low', 0.2))
             app_high = float(request.form.get('app_high', 0.6))
+            min_depth = int(request.form.get('min_depth', 1))
             max_depth = int(request.form.get('max_depth', 5))
             max_free_vars = int(request.form.get('fontana_max_fv', 2))
             expression_count = int(request.form.get('fontana_expression_count', 10))
+            free_variable_probability = float(request.form.get('free_variable_probability', 0.5))
 
             config.update({
                 'abs_low': abs_low,
                 'abs_high': abs_high,
                 'app_low': app_low,
                 'app_high': app_high,
+                'min_depth': min_depth,
                 'max_depth': max_depth,
                 'max_free_vars': max_free_vars,
-                'initial_expression_count': expression_count
+                'initial_expression_count': expression_count,
+                'free_variable_probability': free_variable_probability
             })
 
             generator_params_payload = {
@@ -424,9 +428,11 @@ def run_simulation_form():
                 'abs_high': abs_high,
                 'app_low': app_low,
                 'app_high': app_high,
+                'min_depth': min_depth,
                 'max_depth': max_depth,
                 'max_free_vars': max_free_vars,
-                'initial_expression_count': expression_count
+                'initial_expression_count': expression_count,
+                'free_variable_probability': free_variable_probability
             }
         elif generator_type == 'from_file':
             if 'expressions_file' in request.files:
@@ -976,4 +982,3 @@ def dashboard():
 
 if __name__ == '__main__':
     app.run(debug=True)
-

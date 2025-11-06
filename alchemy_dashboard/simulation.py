@@ -154,8 +154,10 @@ def run_experiment(config):
         generator = alchemy.PyFontanaGen.from_config(
             abs_range=(config['abs_low'], config['abs_high']),
             app_range=(config['app_low'], config['app_high']),
+            min_depth=config.get('min_depth', 1),
             max_depth=config['max_depth'],
-            max_free_vars=config['max_free_vars']
+            max_free_vars=config['max_free_vars'],
+            free_variable_probability=config.get('free_variable_probability', 0.5)
         )
         # Generate initial expressions
         desired = config.get('initial_expression_count', 10)

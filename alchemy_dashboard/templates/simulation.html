@@ -105,16 +105,8 @@
                             <input class="form-control" type="number" name="max_depth" value="5"/>
                         </div>
                         <div class="form-group">
-                            <label class="form-label">Min Depth</label>
-                            <input class="form-control" type="number" name="min_depth" value="1" min="0"/>
-                        </div>
-                        <div class="form-group">
                             <label class="form-label">Max Free Variables</label>
                             <input class="form-control" type="number" name="fontana_max_fv" value="2"/>
-                        </div>
-                        <div class="form-group">
-                            <label class="form-label">Free Variable Probability</label>
-                            <input class="form-control" type="number" name="free_variable_probability" value="0.5" step="0.05" min="0" max="1"/>
                         </div>
                         <div class="form-group">
                             <label class="form-label">Initial Expression Count</label>
@@ -292,11 +284,7 @@ function applyGeneratorParams(generatorType, params) {
         setValue('input[name="app_low"]', appLow);
         setValue('input[name="app_high"]', appHigh);
         setValue('input[name="max_depth"]', params.max_depth);
-        const minDepth = params.min_depth ?? params.minDepth;
-        setValue('input[name="min_depth"]', minDepth);
         setValue('input[name="fontana_max_fv"]', params.max_free_vars ?? params.fontana_max_fv);
-        const freeVarProb = params.free_variable_probability ?? params.freevar_probability;
-        setValue('input[name="free_variable_probability"]', freeVarProb);
         const expressionCount = params.initial_expression_count ?? params.expression_count;
         setValue('input[name="fontana_expression_count"]', expressionCount);
     }

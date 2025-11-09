@@ -14,7 +14,7 @@ dependencies = [
     "pandas>=2.1",
     "sqlalchemy>=2.0",
      "werkzeug>=3.0",
-    "modern-alchemy @ git+https://github.com/mathis-group/Modern-AlChemy.git@cherry-pick-bss-files"
+    "alchemy @ git+https://github.com/mathis-group/Modern-AlChemy.git@cherry-pick-bss-files"
 
 
 ]
@@ -25,4 +25,4 @@ package = true
 dev = ["maturin>=1.6"]
 
 [tool.uv.sources]
-modern-alchemy = { git = "https://github.com/mathis-group/Modern-AlChemy.git", branch = "cherry-pick-bss-files" }
+alchemy = { git = "https://github.com/mathis-group/Modern-AlChemy.git", branch = "cherry-pick-bss-files" }

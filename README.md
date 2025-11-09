@@ -54,7 +54,7 @@ alchemy_dashboard/
 1. **Clone the repository**
 
    ```bash
-   git clone https://github.com/jjoseph12/Alchemy-Dashboard.git
+   git clone https://github.com/mathis-group/Alchemy-Dashboard.git
    cd Alchemy-Dashboard
    ```
 

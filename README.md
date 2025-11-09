@@ -70,21 +70,7 @@ alchemy_dashboard/
    uv sync --dev                      
    ```
 
-3. **Build & install the Rust chemistry core**
-
-   ```bash
-   # go to modern alchemy and download
-   git clone https://github.com/mathis-group/Modern-AlChemy.git
-   
-   # run from the Rust crate directory (where Cargo.toml lives)
-   uv run maturin develop --release
-   ```
-
-4. **Launch the dashboard**
-
-   ```bash
-   #install rust crate directly into dashboard venv
-   uv run maturin develop --release --manifest-path /Users/jjoseph/Desktop/Projects/Modern-AlChemy/Cargo.toml
+3. **Launch the dashboard**
 
    # start dashboard
    uv run python -m alchemy_dashboard.main

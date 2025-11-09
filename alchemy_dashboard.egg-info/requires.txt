@@ -1,4 +1,0 @@
-flask>=3.0
-bokeh==3.6.3
-pandas>=2.1
-sqlalchemy>=2.0

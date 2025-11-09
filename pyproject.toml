@@ -25,4 +25,4 @@ package = true
 dev = ["maturin>=1.6"]
 
 [tool.uv.sources]
-modern-alchemy = { git = "https://github.com/mathis-group/Modern-AlChemy.git" branch = "cherry-pick-bss-files" }
+modern-alchemy = { git = "https://github.com/mathis-group/Modern-AlChemy.git", branch = "cherry-pick-bss-files" }

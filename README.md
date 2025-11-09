@@ -75,7 +75,7 @@ alchemy_dashboard/
    ```bash
    # start dashboard
    uv run python -m alchemy_dashboard.main
-   `uv sync` reads `pyproject.toml`, installs the required packages, and keeps `.venv` reproducible for teammates.                  
+   #`uv sync` reads `pyproject.toml`, installs the required packages, and keeps `.venv` reproducible for teammates.                  
    ```
 
 

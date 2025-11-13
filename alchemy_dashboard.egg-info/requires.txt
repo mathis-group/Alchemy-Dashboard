@@ -2,3 +2,5 @@ flask>=3.0
 bokeh==3.6.3
 pandas>=2.1
 sqlalchemy>=2.0
+werkzeug>=3.0
+alchemy@ git+https://github.com/mathis-group/Modern-AlChemy.git@cherry-pick-bss-files

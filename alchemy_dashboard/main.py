@@ -138,6 +138,7 @@ def database_view():
                          unique_expressions_div=unique_div,
                          active_page='database')
 
+#team fixed this
 @app.route('/simulation')
 def simulation():
     return render_template('simulation.html', active_page='simulation')

@@ -54,7 +54,7 @@ alchemy_dashboard/
 1. **Clone the repository**
 
    ```bash
-   git clone https://github.com/jjoseph12/Alchemy-Dashboard.git
+   git clone https://github.com/mathis-group/Alchemy-Dashboard.git
    cd Alchemy-Dashboard
    ```
 
@@ -70,27 +70,16 @@ alchemy_dashboard/
    uv sync --dev                      
    ```
 
-3. **Build & install the Rust chemistry core**
+3. **Launch the dashboard**
 
    ```bash
-   # go to modern alchemy and download
-   git clone https://github.com/mathis-group/Modern-AlChemy.git
-   
-   # run from the Rust crate directory (where Cargo.toml lives)
-   uv run maturin develop --release
-   ```
-
-4. **Launch the dashboard**
-
-   ```bash
-   #install rust crate directly into dashboard venv
-   uv run maturin develop --release --manifest-path /Users/jjoseph/Desktop/Projects/Modern-AlChemy/Cargo.toml
-
    # start dashboard
    uv run python -m alchemy_dashboard.main
+   #`uv sync` reads `pyproject.toml`, installs the required packages, and keeps `.venv` reproducible for teammates.                  
    ```
 
-   `uv sync` reads `pyproject.toml`, installs the required packages, and keeps `.venv` reproducible for teammates.
+
+
 
 ### Alternative: pip-based workflow
 

@@ -1,0 +1,10 @@
+experiments/
+uploaded_configs/
+dist/
+*.egg-info/
+__pycache__/
+.venv/
+venv/
+.DS_Store
+*.db
+uv.lock

@@ -23,3 +23,9 @@ package = true
 
 [tool.uv.sources]
 alchemy = { git = "https://github.com/mathis-group/Modern-AlChemy.git", branch = "main" }
+
+[tool.setuptools.packages.find]
+exclude = [
+    "uploaded_configs",
+    "experiments",
+]

@@ -32,10 +32,7 @@ from bokeh.embed import components, json_item
 app = Flask(__name__)
 
 app.config['UPLOAD_FOLDER'] = 'uploaded_configs'
-app.config['EXPERIMENT_FOLDER'] = 'experiments'
-
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
-os.makedirs(app.config['EXPERIMENT_FOLDER'], exist_ok=True)
 
 # Initialize database on startup
 init_database()

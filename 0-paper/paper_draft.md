@@ -23,23 +23,23 @@
 
 ## Supercollider Simulation Engine
 
-To support high-throughput experimentation, we developed a high-performance simulation engine in Rust, titled the **Functional Supercollider**, which serves as the computational backend for the AlChemy dashboard. This library implements the core logic of Algorithmic Chemistry while maintaining a modular architecture that decouples simulation dynamics from particle representation through a generic trait system.
+To support high-throughput experimentation, we developed a high-performance Rust simulation engine, titled the **Functional Supercollider**, which serves as the computational backend for the AlChemy dashboard. The engine implements the core logic of Algorithmic Chemistry and uses a generic trait system to decouple simulation dynamics from particle representation.
 
-The simulation models a reactor, or *Soup*, containing a population of particles. Each particle encapsulates a lambda calculus expression, representing an abstract molecule. Evolution proceeds through a stochastic collision loop consisting of three stages:
+The simulation models a reactor, or *Soup*, containing a population of particles. Each particle encapsulates a lambda calculus expression representing an abstract molecule. Evolution proceeds through a stochastic collision loop consisting of three stages:
 
-**Interaction.** Two particles, $A$ and $B$, are randomly selected from the population. Their interaction is defined as function application, producing a new expression:
+**Interaction.** Two particles, $A$ and $B$, are randomly selected. Their interaction is defined as function application, producing a new expression:
 
 $$
 (A \ B)
 $$
 
-**Reaction (Reduction).** The resulting expression is reduced toward normal form. Because lambda calculus is Turing-complete, reduction may not terminate. To enforce computational constraints analogous to thermodynamic limits, the engine imposes strict bounds on reduction complexity. Reactions are terminated if the number of reduction steps exceeds a specified limit ($rlimit$), representing computational cost, or if the expression depth exceeds a structural complexity limit ($slimit$). Expressions exceeding these limits dissipate and are removed from the system.
+**Reaction (Reduction).** The resulting expression is reduced toward normal form. Because lambda calculus is Turing-complete, reduction may not terminate. To ensure bounded computation, the engine enforces limits on reduction steps ($rlimit$) and expression depth ($slimit$). Expressions exceeding these limits are discarded.
 
-**Filtration.** Successfully reduced expressions may be filtered to remove trivial outcomes, such as identity functions or expressions that merely reproduce their parents. This prevents stagnation and promotes functional diversity.
+**Filtration.** Successfully reduced expressions may be filtered to remove trivial results, such as identity functions or direct reproductions of parent expressions. This promotes diversity and prevents stagnation.
 
-In addition to standard collisions, the Functional Supercollider supports conditional selection through *recursive collision events*. Certain particles may act as test functions, evaluating properties of other particles through functional application. If the result reduces to a Church-encoded true value, the tested particle is amplified by reintroducing multiple copies into the reactor. Otherwise, no amplification occurs. This mechanism introduces programmable selection pressure, enabling guided exploration of functional expression space.
+The engine also supports conditional selection through *recursive collision events*. Certain particles act as test functions that evaluate other particles via functional application. If the result reduces to a Church-encoded true value, the tested particle is amplified by reintroducing multiple copies into the population. Otherwise, no amplification occurs. This introduces programmable selection pressure and enables guided exploration of functional expression space.
 
-The Functional Supercollider is exposed to Python through native extensions, allowing seamless integration with the dashboard interface while preserving the performance benefits of Rust for large-scale simulations.
+The Functional Supercollider is exposed to Python through native extensions, enabling integration with the visualization dashboard while maintaining the performance benefits of Rust.
 
 ## Experimental Approach
 

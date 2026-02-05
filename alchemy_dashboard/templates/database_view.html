@@ -29,6 +29,9 @@
             </div>
         </div>
 
+   
+
+
         <div class="card">
             <div class="card-header">
                 <h3 class="card-title">
@@ -65,7 +68,7 @@
                     {{ experiment.generator_params | tojson(indent=2) }}
                 </div>
 
-                <div id="continuation-summary" class="continuation-summary" {% if not experiment.continuation %}style="display: none;"{% endif %}>
+                <div id="continuation-summary" class="continuation-summary" {% if not experiment.continuation %}style="display: none;" {% endif %}>
                     <div class="detail-row">
                         <span class="detail-label">Continues From:</span>
                         <span class="detail-value" id="continuation-parent">{% if experiment.continuation %}ID {{ experiment.continuation.parent_config_id }}{% else %}-{% endif %}</span>
@@ -96,7 +99,7 @@
         <div class="card" id="recursive-tools-card" style="margin-top: 1.5rem;">
             <div class="card-header">
                 <h3 class="card-title">
-                    <i class="""></i>
+                    <i class="" "></i>
                     Recursive Tools
                 </h3>
             </div>
@@ -161,6 +164,37 @@
             </div>
         </div>
 
+        <!---bray curtis-->
+
+        <div class="card" id="distance-analysis-section" style="margin-top: 2rem;">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="fas fa-project-diagram card-title-icon"></i>
+                    Jaccard vs. Bray-Curtis Comparison
+                </h3>
+            </div>
+            <div class="card-body">
+                <div id="distance-plots-container">
+                    <div class="chart-placeholder">Select an experiment to see the ordination analysis.</div>
+                </div>
+            </div>
+        </div>
+
+        <!--Dendrogram section -->
+        <div class="card" id="lineage-analysis-section" style="margin-top: 2rem;">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="fas fa-sitemap card-title-icon"></i>
+                    Hierarchical Lineage (Dendrogram)
+                </h3>
+            </div>
+            <div class="card-body">
+                <div id="dendrogram-container">
+                    <div class="chart-placeholder">Select an experiment to see the lineage tree.</div>
+                </div>
+            </div>
+        </div>
+
         <!-- Histogram Section -->
         <div class="card" id="state-histogram-section" style="margin-top: 2rem;">
             <div class="card-header">
@@ -168,7 +202,7 @@
             </div>
             <div class="card-body">
                 <div style="margin-bottom: 1rem; padding: 10px; background-color: #f8f9fa; border-radius: 5px; border-left: 4px solid #007bff;">
-                    <strong>Note:</strong> Histogram data is only available for experiments that have been imported with full state data. 
+                    <strong>Note:</strong> Histogram data is only available for experiments that have been imported with full state data.
                     <br>Try experiment 15 with collision numbers like 0, 10, 20, 30, etc. for testing.
                 </div>
                 <form id="histogram-form" style="margin-bottom: 1rem;">
@@ -181,41 +215,41 @@
         </div>
 
         <!--- AST section -->
-    
-<div class="card" id="ast-visualization-section" style="margin-top: 2rem;">
-    <div class="card-header">
-        <h3 class="card-title">
-            <i class="fas fa-project-diagram card-title-icon"></i>
-            AST Visualization
-        </h3>
-    </div>
-    <div class="card-body">
-        <div style="margin-bottom: 1rem; padding: 10px; background-color: #f8f9fa; border-radius: 5px; border-left: 4px solid #007bff;">
-            <strong>Note:</strong> Select an expression from the experiment to visualize its AST structure.
-        </div>
-        
-        <form id="ast-form" style="margin-bottom: 1rem;">
-            <div class="form-group">
-                <label for="ast-expression-select">Select Expression:</label>
-                <select id="ast-expression-select" name="expression" class="form-control" style="width: 100%; max-width: 500px;">
-                    <option value="">-- Select an expression --</option>
-                    <!-- Expressions will be populated dynamically -->
-                </select>
+
+        <div class="card" id="ast-visualization-section" style="margin-top: 2rem;">
+            <div class="card-header">
+                <h3 class="card-title">
+                    <i class="fas fa-project-diagram card-title-icon"></i>
+                    AST Visualization
+                </h3>
             </div>
-            <button type="submit" class="btn btn-primary" disabled id="ast-visualize-btn">
-                <i class="fas fa-eye"></i> Visualize AST
-            </button>
-        </form>
-        
-        <div id="ast-visualization-container" class="chart-container">
-            <!-- AST visualization will be rendered here -->
-            <div style="text-align: center; color: #6c757d; padding: 2rem;">
-                <i class="fas fa-project-diagram" style="font-size: 3rem; margin-bottom: 1rem;"></i>
-                <p>Select an expression above to visualize its AST structure</p>
+            <div class="card-body">
+                <div style="margin-bottom: 1rem; padding: 10px; background-color: #f8f9fa; border-radius: 5px; border-left: 4px solid #007bff;">
+                    <strong>Note:</strong> Select an expression from the experiment to visualize its AST structure.
+                </div>
+
+                <form id="ast-form" style="margin-bottom: 1rem;">
+                    <div class="form-group">
+                        <label for="ast-expression-select">Select Expression:</label>
+                        <select id="ast-expression-select" name="expression" class="form-control" style="width: 100%; max-width: 500px;">
+                            <option value="">-- Select an expression --</option>
+                            <!-- Expressions will be populated dynamically -->
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-primary" disabled id="ast-visualize-btn">
+                        <i class="fas fa-eye"></i> Visualize AST
+                    </button>
+                </form>
+
+                <div id="ast-visualization-container" class="chart-container">
+                    <!-- AST visualization will be rendered here -->
+                    <div style="text-align: center; color: #6c757d; padding: 2rem;">
+                        <i class="fas fa-project-diagram" style="font-size: 3rem; margin-bottom: 1rem;"></i>
+                        <p>Select an expression above to visualize its AST structure</p>
+                    </div>
+                </div>
             </div>
         </div>
-    </div>
-</div>
 
 
 
@@ -419,6 +453,10 @@ document.addEventListener("DOMContentLoaded", function() {
     resetExpressionsView();
     renderExperimentPlots(window.currentConfigID);
 
+    if (window.currentConfigID) {
+        renderLineageAnalysis(window.currentConfigID);
+    }
+
     fetch('/list_experiments')
         .then(response => response.json())
         .then(data => {
@@ -508,6 +546,9 @@ document.addEventListener("DOMContentLoaded", function() {
     setupASTVisualization();
 
     populateASTExpressions();
+    if (window.currentConfigID) {
+        renderDistanceAnalysis(window.currentConfigID);
+    }
 });
 
 if (experimentDropdown) {
@@ -516,6 +557,8 @@ if (experimentDropdown) {
         window.currentConfigID = experimentId;
         updateDeleteButtonState();
         renderExperimentPlots(experimentId);
+        renderDistanceAnalysis(experimentId);
+        renderLineageAnalysis(experimentId);
 
         // Fetch and update experiment metadata + expressions
         fetch(`/get_experiment_metadata/${experimentId}`)
@@ -750,7 +793,68 @@ function setupASTVisualization() {
             container.innerHTML = `<div class="alert alert-error">Error generating visualization: ${err.message}</div>`;
         });
     });
-}
+    }
+
+    //bray curtis
+
+    function renderDistanceAnalysis(configId) {
+        const container = document.getElementById('distance-plots-container');
+        if (!container || !configId || configId <= 0) return;
+
+        container.innerHTML = '<div class="chart-placeholder"><i class="fas fa-spinner fa-spin"></i> Analyzing Molecular Distances...</div>';
+
+        document.querySelectorAll('script[data-bokeh-dist="true"]').forEach(s => s.remove());
+
+        fetch(window.location.origin + '/get_distance_analysis/' + configId)
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === "success") {
+                    container.innerHTML = data.div;
+
+                    const idMatch = data.div.match(/id="([^"]+)"/);
+                    const bokehId = idMatch ? idMatch[1] : null;
+
+                    const checkExist = setInterval(() => {
+                        if (document.getElementById(bokehId)) {
+                            clearInterval(checkExist); 
+                            const script = document.createElement('script');
+                            script.textContent = data.script;
+                            script.setAttribute('data-bokeh-dist', 'true');
+                            document.body.appendChild(script);
+                        }
+                    }, 50);
+                } else {
+                    container.innerHTML = `<div class="chart-placeholder">${data.message}</div>`;
+                }
+            })
+            .catch(err => {
+                console.error("Fetch error:", err);
+                container.innerHTML = '<div class="chart-placeholder">Error loading analysis.</div>';
+            });
+    }
+
+
+    function renderLineageAnalysis(configId) {
+        const container = document.getElementById('dendrogram-container');
+        if (!container || !configId || configId <= 0) return;
+
+        container.innerHTML = '<div class="chart-placeholder"><i class="fas fa-spinner fa-spin"></i> Growing Lineage Tree...</div>';
+
+        fetch(`${window.location.origin}/get_lineage_analysis/${configId}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === "success") {
+                    container.innerHTML = data.div;
+                    const script = document.createElement('script');
+                    script.textContent = data.script;
+                    document.body.appendChild(script);
+                } else {
+                    container.innerHTML = `<div class="chart-placeholder">${data.message}</div>`;
+                }
+            });
+    }
+
+   
 
 </script>
 {% endblock %} 

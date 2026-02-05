@@ -141,7 +141,6 @@ def simulation():
 
 
 
-
 #===ast visualizer ====
 @app.route('/visualize_ast', methods=['POST'])
 def visualize_ast():
@@ -172,6 +171,50 @@ def visualize_ast():
         print(f"[ERROR] {error_message}")
         return jsonify({ 'status': 'error', 'message': error_message }), 500
     
+
+#bray curtis vs jaccard plots 
+from .comparison_plots import calculate_distance as run_ordination
+
+@app.route('/get_distance_analysis/<int:config_id>')
+def get_distance_analysis_route(config_id):
+    print(f"DEBUG: Ordination request received for ID {config_id}")
+    try:
+        script, div = run_ordination(config_id)
+        if script is None:
+            return jsonify({"status": "error", "message": "No data available"})
+        
+        import re
+        clean_script = re.sub(r'<script[^>]*>', '', script).replace("</script>", "")
+
+        return jsonify({
+            "status": "success", 
+            "script": clean_script, 
+            "div": div
+        })
+    except Exception as e:
+        print(f"Ordination Route Error: {e}")
+        return jsonify({"status": "error", "message": str(e)})
+
+#dendrogram plot 
+@app.route('/get_lineage_analysis/<int:config_id>')
+def get_lineage_analysis_route(config_id):
+    try:
+        from .lineage_plots import create_dendrogram
+        script, div = create_dendrogram(config_id)
+        
+        import re
+        clean_script = re.sub(r'<script[^>]*>', '', script).replace("</script>", "")
+        
+        return jsonify({
+            "status": "success",
+            "script": clean_script,
+            "div": div
+        })
+    except Exception as e:
+        print(f"Dendrogram Error: {e}")
+        return jsonify({"status": "error", "message": str(e)})
+
+
 
 
 @app.route('/api/continuation_config/<int:config_id>')
@@ -979,3 +1022,5 @@ def dashboard():
 
 if __name__ == '__main__':
     app.run(debug=True)
+
+    

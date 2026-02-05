@@ -7,6 +7,11 @@ from bokeh.embed import components
 from .ASTGen import LambdaParser, VariableNode, LambdaNode, getColors
 import pandas as pd
 import json
+# new imports for jaccard
+import numpy as np
+from scipy.spatial.distance import pdist, squareform
+import matplotlib.pyplot as plt
+from sklearn.manifold import MDS
 
 # Define colors using CSS variables
 PRIMARY_COLOR = "#4F46E5"  # var(--primary)

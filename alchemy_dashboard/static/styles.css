@@ -1467,6 +1467,38 @@
     width: 100% !important;
     height: 100% !important;
     }
+
+/*comparison plot*/
+#distance-plots-container {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 450px;
+    padding: 1.5rem;
+    overflow-x: auto; 
+}
+
+    #distance-plots-container .bk-root {
+        margin: 0 auto !important;
+        width: 100% !important;
+    }
+
+/*dendrogram*/
+#dendrogram-container {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 500px;
+    padding: 1rem;
+    overflow-x: auto;
+}
+
+    #dendrogram-container .bk-root {
+        margin: 0 auto !important;
+    }
+
     
     /* Responsive Design */
     @media (max-width: 1200px) {
@@ -1524,4 +1556,8 @@
       .results-section {
         padding: 1rem;
       }
+
+    
     }
+
+ 

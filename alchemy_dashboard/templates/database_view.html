@@ -182,11 +182,17 @@
 
         <!--Dendrogram section -->
         <div class="card" id="lineage-analysis-section" style="margin-top: 2rem;">
-            <div class="card-header">
+            <div class="card-header d-flex justify-content-between align-items-center">
                 <h3 class="card-title">
                     <i class="fas fa-sitemap card-title-icon"></i>
-                    Hierarchical Lineage (Dendrogram)
+                    Dendrograms
                 </h3>
+                <div class="tree-controls">
+                    <select id="tree_mode_dropdown" class="form-control form-control-sm" style="width: auto;">
+                        <option value="ward">Ward</option>
+                        <option value="edit">Edit Distance</option>
+                    </select>
+                </div>
             </div>
             <div class="card-body">
                 <div id="dendrogram-container">
@@ -836,11 +842,15 @@ function setupASTVisualization() {
 
     function renderLineageAnalysis(configId) {
         const container = document.getElementById('dendrogram-container');
+        // Get the current mode from our new dropdown
+        const mode = document.getElementById('tree_mode_dropdown').value;
+
         if (!container || !configId || configId <= 0) return;
 
         container.innerHTML = '<div class="chart-placeholder"><i class="fas fa-spinner fa-spin"></i> Growing Lineage Tree...</div>';
 
-        fetch(`${window.location.origin}/get_lineage_analysis/${configId}`)
+        // Update the URL to include the tree_mode parameter
+        fetch(`${window.location.origin}/get_lineage_analysis/${configId}?tree_mode=${mode}`)
             .then(res => res.json())
             .then(data => {
                 if (data.status === "success") {
@@ -853,6 +863,13 @@ function setupASTVisualization() {
                 }
             });
     }
+
+    // Add an event listener so the tree updates immediately when you change the dropdown
+    document.getElementById('tree_mode_dropdown').addEventListener('change', function () {
+        if (window.currentConfigID) {
+            renderLineageAnalysis(window.currentConfigID);
+        }
+    });
 
    
 

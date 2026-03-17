@@ -562,6 +562,138 @@ def get_entropy_detail(collision_number):
     except Exception as e:
         return f"Error: {str(e)}", 500
 
+#sequence alignment route for comparing expressions using Levenshtein distance and percentage identity
+
+@app.route('/api/sequence_alignment/<int:config_id>', methods=['POST'])
+def sequence_alignment(config_id):
+    try:
+        import Levenshtein
+        from .db_utils import get_comparison_data
+        
+        data = request.get_json()
+        target_expr = data.get('expression')
+        
+        if not target_expr:
+            return jsonify({'status': 'error', 'message': 'No target expression provided.'}), 400
+
+        # obtain most abundant molecules
+        df = get_comparison_data(config_id, most=100)
+        if df.empty:
+            return jsonify({'status': 'error', 'message': 'No data found for this experiment.'}), 404
+            
+        unique_molecules = df['expression'].unique().tolist()
+        
+        results = []
+        for expr in unique_molecules:
+            #molcule is not compared to self
+            if expr == target_expr:
+                continue 
+            #use levenshtein distance to calculate conversion from target expr to expr
+            dist = Levenshtein.distance(str(target_expr), str(expr))
+            max_len = max(len(str(target_expr)), len(str(expr)))
+            
+            # percentage identity forumla
+            identity = round((1 - (dist / max_len)) * 100, 2) if max_len > 0 else 100.0
+            
+            results.append({
+                'expression': expr,
+                'distance': dist,
+                'identity': identity
+            })
+            
+        # sort results
+        results = sorted(results, key=lambda x: x['identity'], reverse=True)
+        
+        # return top 10 matches
+        return jsonify({'status': 'success', 'target': target_expr, 'results': results[:10]})
+        
+    except Exception as e:
+        print(f"Alignment Error: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+#function to simulate extinction event 
+@app.route('/trigger_extinction', methods=['POST'])
+def trigger_extinction():
+    try:
+        
+        data = request.get_json()
+        parent_config_id = data.get('config_id')
+        
+        if not parent_config_id:
+            return jsonify({'status': 'error', 'message': 'Missing config_id'}), 400
+
+        # fetch the final state
+        final_state = get_expressions_for_collision(parent_config_id, -1)
+        if not final_state:
+            return jsonify({'status': 'error', 'message': 'No final data found.'}), 404
+
+        # sort population count from highest to lowest
+        sorted_population = sorted(final_state, key=lambda x: x[1], reverse=True)
+        
+        # remove the molecule with the highest count
+        apex_predator = sorted_population[0][0]
+        apex_count = sorted_population[0][1]
+        survivors = sorted_population[1:] 
+
+        # reconstruct survivor list for rust
+        survivor_expressions = []
+        for expr, count in survivors:
+            survivor_expressions.extend([expr] * count) 
+
+        if not survivor_expressions:
+            return jsonify({'status': 'error', 'message': 'No surivors left!'}), 400
+
+        # send to rust 
+        config = {
+            'generator_type': 'from_file', 
+            'expressions': survivor_expressions,
+            'total_collisions': 1000, 
+            'polling_frequency': 10,
+            'random_seed': 42,
+            'experiment_name': f"Post-Extinction (Parent: {parent_config_id})",
+            'continuation': {
+                'parent_config_id': parent_config_id,
+                'fraction': 1.0 
+            }
+        }
+
+        # run experiment with survivors
+        result = run_experiment(config)
+        
+        # save new configuration 
+        new_config_id = save_configuration(
+            random_seed=config['random_seed'], 
+            generator_type='from_file', 
+            total_collisions=config['total_collisions'],
+            polling_frequency=config['polling_frequency'], 
+            probability_range=json.dumps({'input_mode': 'extinction_event', 'culled_species': apex_predator}),
+            name=config['experiment_name']
+        )
+
+        # save initial state, metrics and record timeline
+        for expr, count in Counter(survivor_expressions).items():
+            save_experiment_state(new_config_id, 0, expr, count)
+
+        metrics = result.get('metrics', [])
+        for metric in metrics:
+            save_averages(new_config_id, metric['collision_number'], metric['entropy'], metric['unique_expressions'])
+            if 'expressions' in metric:
+                for expr, count in Counter(metric['expressions']).items():
+                    save_experiment_state(new_config_id, metric['collision_number'], expr, count)
+
+        save_continuation_metadata(new_config_id, parent_config_id, 1.0, len(survivors), 0)
+
+        return jsonify({
+            'status': 'success', 
+            'new_config_id': new_config_id,
+            'message': f"The most abundant expression '{apex_predator[:15]}...' ({apex_count} copies) was eradicated. A new timeline has started"
+        })
+
+    except Exception as e:
+        print(f"Extinction Error: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
 @app.route('/dashboard')
 def dashboard():
     experiments = get_experiment_configs()[:5]

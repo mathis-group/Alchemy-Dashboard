@@ -62,7 +62,7 @@ The Functional Supercollider is exposed to Python through native extensions, ena
 - There are 4 visualization plots that this dashboard generates
     - 1: Entropy Over time (The amount of disorder caused by lambda collisions over time)
     - 2: Unique expressions over time (How many unique expressions are formed by these collisions over time)
-    - 3: State histogram at collision (lists the top 20 expressions by frequency
+    - 3: State histogram at collision (lists the top 20 expressions by frequency)
     - 4: AST visualization (creates an AST tree of selected lambda expression)
       
 #### Implementation

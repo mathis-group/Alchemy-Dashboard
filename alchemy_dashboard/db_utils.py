@@ -1,8 +1,10 @@
 # alchemy_dashboard/db_utils.py
 
 import os
+from re import ASCII
 import sqlite3
 import json
+from typing import Counter
 import pandas as pd
 
 # Get the absolute path to the database
@@ -407,3 +409,35 @@ def get_entropy_and_histogram(config_id, collision_number):
         "entropy": entropy,
         "histogram": histogram
     }
+
+
+#db for comparison analysis
+def get_comparison_data(config_id, most=100):
+    if not check_database_exists():
+        return pd.DataFrame()
+    conn = sqlite3.connect(DB_NAME)
+    #group by most popular expression, find the top 100 expressions that appear
+    query = f"""
+    SELECT collision_number, expression, count 
+    FROM Experiment 
+    WHERE config_id=? 
+    AND expression IN (
+        SELECT expression FROM Experiment 
+        WHERE config_id=?
+        GROUP BY expression 
+        ORDER BY SUM(count) DESC 
+        LIMIT {most}
+    )
+    ORDER BY collision_number ASC 
+    """
+    print(f"DEBUG: Looking for database at: {DB_NAME}")
+    print(f"DEBUG: Does it exist? {os.path.exists(DB_NAME)}")
+    #creates a data frame from query
+    try:
+        df = pd.read_sql_query(query,conn,params=(config_id,config_id))
+        return df
+    except Exception as e:
+        print(f"Query Failed: {e}")
+        return pd.DataFrame()
+    finally:
+        conn.close()

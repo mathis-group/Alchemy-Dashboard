@@ -693,6 +693,36 @@ def trigger_extinction():
         print(f"Extinction Error: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
+#route for comparison dendrograms 
+@app.route('/multi_compare')
+def multi_compare_page():
+    # Fetch all experiments so the user can select them from a list
+    experiments = get_experiment_configs()
+    return render_template('multi_compare.html', experiments=experiments, active_page='multi_compare')
+
+@app.route('/api/generate_multi_dendrogram', methods=['POST'])
+def generate_multi_dendrogram():
+    try:
+        data = request.get_json()
+        selected_ids = data.get('experiment_ids', [])
+        mode = data.get('mode', 'ward') # Catch the mode!
+        
+        if len(selected_ids) < 2:
+            return jsonify({'status': 'error', 'message': 'Please select at least two experiments to compare.'}), 400
+
+        from .plotting import create_multi_experiment_dendrogram 
+        
+        # Pass both variables into the math engine
+        script, div = create_multi_experiment_dendrogram(selected_ids, mode)
+        
+        import re
+        clean_script = re.sub(r'<script[^>]*>', '', script).replace("</script>", "")
+        
+        return jsonify({'status': 'success', 'script': clean_script, 'div': div})
+    except Exception as e:
+        print(f"Multi-Compare Error: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
 
 @app.route('/dashboard')
 def dashboard():

@@ -4,8 +4,8 @@
 
 {% block content %}
 <div class="container mt-4">
-    <h2><i class="fas fa-network-wired"></i> Meta-Ecosystem Comparison</h2>
-    <p class="text-muted">Select two experiments below to map how their final evolutionary states compare to one another.</p>
+    <h2><i class="fas fa-network-wired"></i> Multiple-Experiment Comparison</h2>
+    <p class="text-muted">Select two experiments to compare their structures.</p>
 
     <div class="row">
         <div class="col-md-4">
@@ -13,33 +13,24 @@
                 <div class="card-header bg-dark text-white">
                     <h5 class="mb-0">Select Experiments</h5>
                 </div>
-
-                <div class="card-body border-bottom bg-light">
-                    <label class="fw-bold mb-2">Comparison Mode</label>
-                    <select id="compare-mode-dropdown" class="form-select">
-                        <option value="edit">Micro: Structural Genetics (Edit Distance)</option>
-                        <option value="ward">Macro: Ecosystem Populations (Ward)</option>
-                    </select>
-                </div>
-
                 <div class="card-body">
                     <div class="form-group mb-3">
-                        <label for="experiment-1-dropdown" class="form-label fw-bold">Experiment A</label>
-                        <select class="form-control" id="experiment-1-dropdown">
-                            <option value="" disabled selected>Loading experiments...</option>
+                        <label for="exp-a" class="form-label fw-bold">Experiment A</label>
+                        <select class="form-control" id="exp-a">
+                            <option value="" disabled selected>Loading...</option>
                         </select>
                     </div>
 
                     <div class="form-group mb-4">
-                        <label for="experiment-2-dropdown" class="form-label fw-bold">Experiment B</label>
-                        <select class="form-control" id="experiment-2-dropdown">
-                            <option value="" disabled selected>Loading experiments...</option>
+                        <label for="exp-b" class="form-label fw-bold">Experiment B</label>
+                        <select class="form-control" id="exp-b">
+                            <option value="" disabled selected>Loading...</option>
                         </select>
                     </div>
                 </div>
                 <div class="card-footer">
-                    <button class="btn btn-primary w-100" id="run-compare-btn" onclick="runMultiCompare()">
-                        Generate Dendrogram
+                    <button class="btn btn-primary w-100" id="run-btn" onclick="runCompare()">
+                        Compare Structures
                     </button>
                 </div>
             </div>
@@ -48,10 +39,10 @@
         <div class="col-md-8">
             <div class="card h-100">
                 <div class="card-body">
-                    <div id="multi-dendrogram-container" style="min-height: 400px; display: flex; align-items: center; justify-content: center;">
-                        <div class="text-muted text-center" id="placeholder-text">
-                            <i class="fas fa-project-diagram fa-3x mb-3"></i><br>
-                            Select two experiments and click Generate to see the comparison.
+                    <div id="plot-container" style="min-height: 500px; display: flex; align-items: center; justify-content: center;">
+                        <div class="text-muted text-center" id="placeholder">
+                            
+                            Select two experiments to generate a structural dendrogram.
                         </div>
                     </div>
                 </div>
@@ -61,80 +52,49 @@
 </div>
 
 <script>
-    // Auto-load the dropdowns securely using your existing API route when the page opens
+    // populate dorpdown menu
     document.addEventListener("DOMContentLoaded", function () {
         fetch('/list_experiments')
-            .then(response => response.json())
+            .then(res => res.json())
             .then(data => {
-                const dropdown1 = document.getElementById('experiment-1-dropdown');
-                const dropdown2 = document.getElementById('experiment-2-dropdown');
+                const dropA = document.getElementById('exp-a');
+                const dropB = document.getElementById('exp-b');
 
-                dropdown1.innerHTML = '<option value="" disabled selected>-- Select Experiment A --</option>';
-                dropdown2.innerHTML = '<option value="" disabled selected>-- Select Experiment B --</option>';
+                const options = data.experiments.map(exp => {
+                    const name = exp.name ? exp.name : `ID: ${exp.config_id} (Seed: ${exp.random_seed})`;
+                    return `<option value="${exp.config_id}">${name}</option>`;
+                }).join('');
 
-                if (data.experiments && data.experiments.length > 0) {
-                    data.experiments.forEach(exp => {
-                        const displayName = exp.name ?
-                            `${exp.name} (ID: ${exp.config_id})` :
-                            `ID: ${exp.config_id} (Seed: ${exp.random_seed}) - ${exp.generator_type}`;
-
-                        const option1 = document.createElement('option');
-                        option1.value = exp.config_id;
-                        option1.textContent = displayName;
-
-                        const option2 = document.createElement('option');
-                        option2.value = exp.config_id;
-                        option2.textContent = displayName;
-
-                        dropdown1.appendChild(option1);
-                        dropdown2.appendChild(option2);
-                    });
-                }
-            })
-            .catch(err => console.error("Failed to load experiments for dropdowns:", err));
+                dropA.innerHTML = '<option value="" disabled selected>-- Select Experiment A --</option>' + options;
+                dropB.innerHTML = '<option value="" disabled selected>-- Select Experiment B --</option>' + options;
+            });
     });
 
-    function runMultiCompare() {
-        const exp1 = document.getElementById('experiment-1-dropdown').value;
-        const exp2 = document.getElementById('experiment-2-dropdown').value;
-        // NEW: Grab the selected mode
-        const selectedMode = document.getElementById('compare-mode-dropdown').value;
+    function runCompare() {
+        const a = document.getElementById('exp-a').value;
+        const b = document.getElementById('exp-b').value;
 
-        if (!exp1 || !exp2) {
-            alert("Please select both Experiment A and Experiment B.");
+        if (!a || !b || a === b) {
+            alert("Please select two different experiments.");
             return;
         }
 
-        if (exp1 === exp2) {
-            alert("Please select two different experiments to compare.");
-            return;
-        }
+        const btn = document.getElementById('run-btn');
+        const container = document.getElementById('plot-container');
 
-        const selectedIds = [parseInt(exp1), parseInt(exp2)];
-
-        const btn = document.getElementById('run-compare-btn');
-        const container = document.getElementById('multi-dendrogram-container');
-        const placeholder = document.getElementById('placeholder-text');
-
-        btn.innerHTML = "<i class='fas fa-spinner fa-spin'></i> Processing...";
+        btn.innerHTML = "<i class='fas fa-spinner fa-spin'></i> Analyzing Genetics...";
         btn.disabled = true;
-        if (placeholder) placeholder.style.display = 'none';
-        container.innerHTML = '<div class="text-center"><i class="fas fa-spinner fa-spin fa-2x"></i><p>Building Matrix...</p></div>';
+        container.innerHTML = '<div class="text-center"><i class="fas fa-spinner fa-spin fa-2x"></i><p>Calculating Edit Distances...</p></div>';
 
-        // NEW: Send the mode alongside the IDs to the Python engine
         fetch('/api/generate_multi_dendrogram', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                experiment_ids: selectedIds,
-                mode: selectedMode
-            })
+            body: JSON.stringify({ experiment_ids: [parseInt(a), parseInt(b)] })
         })
             .then(res => res.json())
             .then(data => {
-                btn.innerHTML = "Generate Dendrogram";
+                btn.innerHTML = "Compare Molecular Structures";
                 btn.disabled = false;
-
                 if (data.status === 'success') {
                     container.innerHTML = data.div;
                     const script = document.createElement('script');
@@ -143,12 +103,6 @@
                 } else {
                     container.innerHTML = `<div class="alert alert-danger">${data.message}</div>`;
                 }
-            })
-            .catch(err => {
-                btn.innerHTML = "Generate Dendrogram";
-                btn.disabled = false;
-                container.innerHTML = `<div class="alert alert-danger">Failed to fetch data.</div>`;
-                console.error(err);
             });
     }
 </script>

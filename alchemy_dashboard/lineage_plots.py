@@ -208,6 +208,6 @@ def create_multi_experiment_dendrogram(config_ids, mode='ward'):
         p.xaxis.major_label_text_color = None
         p.xaxis.major_tick_line_color = None
         p.xaxis.minor_tick_line_color = None
-        p.yaxis.axis_label = "Mutation Count (Edit Distance)"
+        p.yaxis.axis_label = "Edit Distance"
         
         return components(p)

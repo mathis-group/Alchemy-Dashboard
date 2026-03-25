@@ -82,84 +82,6 @@ def create_styled_figure(title, x_label, y_label, width=800, height=300):
 
     return fig
 
-# from bokeh.models import ColumnDataSource, HoverTool, TapTool, CustomJS
-
-# def plot_experiment_metrics(df):
-#     """
-#     Create plots for a single experiment's metrics.
-    
-#     Args:
-#         df (DataFrame): DataFrame with collision_number, entropy, unique_expressions_count
-        
-#     Returns:
-#         list: List of Bokeh figure objects
-#     """
-#     source = ColumnDataSource(data=dict(
-#         x=df['collision_number'],
-#         entropy=df['entropy'],
-#         unique=df['unique_expressions_count'],
-#         total=df.get('total_expressions', [0] * len(df))
-#     ))
-
-#     # === Entropy plot ===
-#     entropy_plot = create_styled_figure("Entropy Over Time", "Collision Number", "Entropy")
-#     entropy_plot.line('x', 'entropy', source=source, line_width=2.5, color=PRIMARY_COLOR, line_alpha=0.8)
-
-#     # TapTool requires a selectable glyph — use scatter with selection color
-#     entropy_plot.scatter('x', 'entropy', source=source, size=8, color=PRIMARY_COLOR,
-#                          alpha=0.6, selection_color="red", nonselection_alpha=0.4)
-
-#     entropy_plot.add_tools(HoverTool(tooltips=[
-#         ("Collision", "@x"),
-#         ("Entropy", "@entropy{0.0000}")
-#     ], mode='vline'))
-
-#     # === Unique expressions plot ===
-#     unique_plot = create_styled_figure("Unique Expressions Over Time", "Collision Number", "Count")
-#     unique_plot.line('x', 'unique', source=source, line_width=2.5, color=SECONDARY_COLOR, line_alpha=0.8)
-#     unique_plot.scatter('x', 'unique', source=source, size=6, color=SECONDARY_COLOR, alpha=0.6)
-#     unique_plot.add_tools(HoverTool(tooltips=[
-#         ("Collision", "@x"),
-#         ("Unique Expressions", "@unique")
-#     ], mode='vline'))
-
-#     plots = [entropy_plot, unique_plot]
-
-#     # === Optional: Total expressions plot ===
-#     if 'total_expressions' in df.columns:
-#         total_plot = create_styled_figure("Total Expressions Over Time", "Collision Number", "Count")
-#         total_plot.line('x', 'total', source=source, line_width=2.5, color=ACCENT_COLOR, line_alpha=0.8)
-#         total_plot.scatter('x', 'total', source=source, size=6, color=ACCENT_COLOR, alpha=0.6)
-#         total_plot.add_tools(HoverTool(tooltips=[
-#             ("Collision", "@x"),
-#             ("Total Expressions", "@total")
-#         ], mode='vline'))
-#         plots.append(total_plot)
-
-#     # === Enable TapTool and attach JS callback ===
-#     entropy_plot.add_tools(TapTool())
-
-#     tap_callback = CustomJS(args=dict(source=source), code="""
-#         const selected_index = source.selected.indices[0];
-#         if (selected_index != null) {
-#             const collision = source.data['x'][selected_index];
-#             fetch(`/get_entropy_detail/${collision}?config_id=${window.currentConfigID}`)
-#                 .then(response => response.text())
-#                 .then(html => {
-#                     const target = document.getElementById("entropy-details");
-#                     if (target) {
-#                         target.innerHTML = html;
-#                         target.scrollIntoView({ behavior: "smooth" });
-#                     }
-#                 });
-#         }
-#     """)
-#     source.selected.js_on_change('indices', tap_callback)
-
-#     return plots
-
-
-
 
 
 
@@ -683,122 +605,63 @@ def ASTErr(message):
     return p
 
 
-def create_multi_experiment_dendrogram(config_ids, mode='ward'):
+# multiple experiment dendrogram
+
+def create_multi_experiment_dendrogram(config_ids):
     from scipy.cluster.hierarchy import linkage, dendrogram
     import pandas as pd
     import numpy as np
+    import Levenshtein
+    from scipy.spatial.distance import squareform
+    from sklearn.metrics import pairwise_distances
     from bokeh.plotting import figure
     from bokeh.embed import components
-    from .db_utils import get_expressions_for_collision, get_experiment_details, get_comparison_data
+    from bokeh.models import ColumnDataSource, HoverTool
+    from .db_utils import get_comparison_data
 
-    if mode == 'ward':
-        # --- MACRO ECOSYSTEM COMPARISON ---
-        final_states = {}
-        all_unique_expressions = set()
-        experiment_labels = []
+    all_molecules = set()
+    
+    # grab top 50 molecules from each experiment 
+    for cid in config_ids:
+        df = get_comparison_data(cid, most=50) 
+        if not df.empty:
+            all_molecules.update(df['expression'].unique())
+    
+    unique_list = list(all_molecules)
+    if not unique_list:
+        raise ValueError("No data found for those experiments.")
 
-        for cid in config_ids:
-            config, _, _ = get_experiment_details(cid)
-            if not config: continue
-            label = f"Exp {cid} (Seed: {config[1]})"
-            experiment_labels.append(label)
+    # calculate distance matrix with levenshtein distance
+    dist_matrix = pairwise_distances(
+        np.array(unique_list).reshape(-1, 1), 
+        metric=lambda x, y: Levenshtein.distance(str(x[0]), str(y[0]))
+    )
+    
+    Z = linkage(squareform(dist_matrix), method='average')
+    ddata = dendrogram(Z, no_plot=True)
+    
+    p = figure(title="Cross-Experiment Edit Distance", 
+               height=500, sizing_mode="stretch_width",
+               toolbar_location="above", tools="pan,wheel_zoom,reset,save")
+    
+    # draw branches
+    source = ColumnDataSource(data={'xs': ddata['icoord'], 'ys': ddata['dcoord']})
+    p.multi_line('xs', 'ys', source=source, color="#10B981", line_width=2)
 
-            state = get_expressions_for_collision(cid, -1)
-            if not state: continue
-            
-            state_dict = dict(state) 
-            final_states[label] = state_dict
-            all_unique_expressions.update(state_dict.keys())
+    # hover over leaves
+    leaves = ddata['leaves']
+    ordered_labels = [unique_list[leaf] for leaf in leaves]
+    
+    leaf_source = ColumnDataSource(data={
+        'x': [(i * 10) + 5 for i in range(len(ordered_labels))],
+        'y': [0] * len(ordered_labels),
+        'detail': ordered_labels
+    })
+    
+    leaf_renderer = p.circle('x', 'y', source=leaf_source, size=10, fill_alpha=0, line_alpha=0)
+    p.add_tools(HoverTool(renderers=[leaf_renderer], tooltips=[("Molecule", "@detail")]))
 
-        if not final_states:
-            raise ValueError("No valid final state data found.")
-
-        records = []
-        for label in experiment_labels:
-            if label not in final_states: continue
-            row = {'Label': label}
-            for expr in all_unique_expressions:
-                row[expr] = final_states[label].get(expr, 0)
-            records.append(row)
-
-        df = pd.DataFrame(records).set_index('Label')
-        Z = linkage(df.values, method='ward')
-        ddata = dendrogram(Z, no_plot=True)
-
-        p = figure(title="Meta-Ecosystem Comparison (Ward Distance)", 
-                   height=500, sizing_mode="stretch_width",
-                   toolbar_location="above", tools="pan,wheel_zoom,box_zoom,reset,save")
-        
-        for i, d in zip(ddata['icoord'], ddata['dcoord']):
-            p.line(i, d, line_color="#4F46E5", line_width=2)
-
-        leaves = ddata['leaves']
-        labels = [df.index[leaf] for leaf in leaves]
-        tick_locs = [(i * 10) + 5 for i in range(len(leaves))] 
-        
-        p.xaxis.ticker = tick_locs
-        p.xaxis.major_label_overrides = {loc: label for loc, label in zip(tick_locs, labels)}
-        p.xaxis.major_label_orientation = 0.8 
-        p.yaxis.axis_label = "Population Variance"
-
-        return components(p)
-
-    elif mode == 'edit':
-        # --- MICRO GENETICS COMPARISON (LEVENSHTEIN) ---
-        import Levenshtein
-        from scipy.spatial.distance import squareform
-        from sklearn.metrics import pairwise_distances
-        from bokeh.models import ColumnDataSource, HoverTool
-
-        all_unique_expressions = set()
-        
-        # Pool the top 50 survivors from EVERY selected experiment
-        for cid in config_ids:
-            df = get_comparison_data(cid, most=50) 
-            if not df.empty:
-                all_unique_expressions.update(df['expression'].unique())
-        
-        unique_molecules = list(all_unique_expressions)
-        
-        if not unique_molecules:
-            raise ValueError("No expressions found to compare.")
-            
-        # Calculate Levenshtein typos across the giant pooled bucket
-        dist_matrix = pairwise_distances(
-            np.array(unique_molecules).reshape(-1, 1), 
-            metric=lambda x, y: Levenshtein.distance(str(x[0]), str(y[0]))
-        )
-        
-        Z = linkage(squareform(dist_matrix), method='average')
-        ddata = dendrogram(Z, no_plot=True)
-        
-        p = figure(title="Cross-Experiment Structural Similarity (Edit Distance)", 
-                   height=500, sizing_mode="stretch_width",
-                   toolbar_location="above", tools="pan,wheel_zoom,box_zoom,reset,save")
-        
-        source = ColumnDataSource(data={'xs': ddata['icoord'], 'ys': ddata['dcoord']})
-        p.multi_line('xs', 'ys', source=source, color="#10B981", line_width=2, alpha=0.8)
-        
-        labels = unique_molecules
-        leaves = ddata['leaves']
-        ordered_labels = [labels[leaf] for leaf in leaves]
-        
-        leaf_source = ColumnDataSource(data={
-            'x': [(i * 10) + 5 for i in range(len(ordered_labels))],
-            'y': [0] * len(ordered_labels),
-            'detail': ordered_labels
-        })
-        
-        leaf_renderer = p.circle('x', 'y', source=leaf_source, size=15, 
-                                 fill_alpha=0, line_alpha=0, hover_fill_alpha=0.5, hover_fill_color="red")
-        
-        hover = HoverTool(renderers=[leaf_renderer], tooltips=[("Molecule", "@detail")])
-        p.add_tools(hover)
-        
-        p.xaxis.ticker = [(i * 10) + 5 for i in range(len(ordered_labels))]
-        p.xaxis.major_label_text_color = None
-        p.xaxis.major_tick_line_color = None
-        p.xaxis.minor_tick_line_color = None
-        p.yaxis.axis_label = "Mutation Count (Edit Distance)"
-        
-        return components(p)
+    p.xaxis.major_label_text_color = None # 
+    p.yaxis.axis_label = "Differences"
+    
+    return components(p)

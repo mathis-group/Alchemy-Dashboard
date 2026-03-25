@@ -619,19 +619,22 @@ def create_multi_experiment_dendrogram(config_ids):
     from bokeh.models import ColumnDataSource, HoverTool
     from .db_utils import get_comparison_data
 
-    all_molecules = set()
-    
-    # grab top 50 molecules from each experiment 
+    # gather expressions and map every experiment they appear in 
+    # Expression, Value: List of Exp IDs
+    molecule_origins = {} 
     for cid in config_ids:
         df = get_comparison_data(cid, most=50) 
         if not df.empty:
-            all_molecules.update(df['expression'].unique())
+            for expr in df['expression'].unique():
+                if expr not in molecule_origins:
+                    molecule_origins[expr] = []
+                molecule_origins[expr].append(str(cid))
     
-    unique_list = list(all_molecules)
+    unique_list = list(molecule_origins.keys())
     if not unique_list:
-        raise ValueError("No data found for those experiments.")
+        raise ValueError("No genomic data found.")
 
-    # calculate distance matrix with levenshtein distance
+    # Calculate distance matrix
     dist_matrix = pairwise_distances(
         np.array(unique_list).reshape(-1, 1), 
         metric=lambda x, y: Levenshtein.distance(str(x[0]), str(y[0]))
@@ -640,28 +643,73 @@ def create_multi_experiment_dendrogram(config_ids):
     Z = linkage(squareform(dist_matrix), method='average')
     ddata = dendrogram(Z, no_plot=True)
     
-    p = figure(title="Cross-Experiment Edit Distance", 
-               height=500, sizing_mode="stretch_width",
+    p = figure(title="Cross-Experiment Dendrogram Tree", 
+               height=600, sizing_mode="stretch_width",
                toolbar_location="above", tools="pan,wheel_zoom,reset,save")
     
     # draw branches
     source = ColumnDataSource(data={'xs': ddata['icoord'], 'ys': ddata['dcoord']})
     p.multi_line('xs', 'ys', source=source, color="#10B981", line_width=2)
 
-    # hover over leaves
+    # hover data
     leaves = ddata['leaves']
     ordered_labels = [unique_list[leaf] for leaf in leaves]
+    
+    # display strings
+    display_origins = []
+    node_colors = []
+    
+    for label in ordered_labels:
+        ids = molecule_origins[label]
+        if len(ids) > 1:
+            # if shared highlight it red
+            display_origins.append(f"SHARED: {', '.join(ids)}")
+            node_colors.append("#f87171") 
+        else:
+            display_origins.append(f"Exp {ids[0]}")
+            node_colors.append("#10B981")
     
     leaf_source = ColumnDataSource(data={
         'x': [(i * 10) + 5 for i in range(len(ordered_labels))],
         'y': [0] * len(ordered_labels),
-        'detail': ordered_labels
+        'detail': ordered_labels,
+        'origin': display_origins,
+        'color': node_colors
     })
     
-    leaf_renderer = p.circle('x', 'y', source=leaf_source, size=10, fill_alpha=0, line_alpha=0)
-    p.add_tools(HoverTool(renderers=[leaf_renderer], tooltips=[("Molecule", "@detail")]))
+    # draw leaf dots
+    leaf_renderer = p.circle('x', 'y', source=leaf_source, size=12, 
+                             color='color', line_color="white", line_width=1)
 
-    p.xaxis.major_label_text_color = None # 
-    p.yaxis.axis_label = "Differences"
+    # tooltip with expression and origin info
+    hover_html = """
+        <div style="
+            padding: 10px; 
+            background-color: #1e293b; 
+            color: white; 
+            border-radius: 8px; 
+            max-width: 300px; 
+            word-wrap: break-word; 
+            font-family: 'Courier New', monospace;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+        ">
+            <div style="font-size: 10px; text-transform: uppercase; color: #94a3b8; margin-bottom: 4px; font-weight: bold;">
+                Source: @origin
+            </div>
+            <div style="font-size: 13px; line-height: 1.4; color: #38bdf8;">
+                @detail
+            </div>
+        </div>
+    """
+
+    p.add_tools(HoverTool(
+        renderers=[leaf_renderer], 
+        tooltips=hover_html,
+        attachment="vertical",
+        point_policy="follow_mouse"
+    ))
+
+    p.xaxis.major_label_text_color = None 
+    p.yaxis.axis_label = "Edit Distance"
     
     return components(p)

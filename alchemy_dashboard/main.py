@@ -492,9 +492,25 @@ def list_experiments():
     result = {'experiments': []}
     for exp in experiments:
         if isinstance(exp, dict):
-            entry = {'config_id': exp.get('config_id'), 'name': exp.get('name'), 'generator_type': exp.get('generator_type'), 'total_collisions': exp.get('total_collisions'), 'polling_frequency': exp.get('polling_frequency'), 'timestamp': exp.get('timestamp')}
+            entry = {
+                'config_id': exp.get('config_id'), 
+                'name': exp.get('name'), 
+                'random_seed': exp.get('random_seed'), 
+                'generator_type': exp.get('generator_type'), 
+                'total_collisions': exp.get('total_collisions'), 
+                'polling_frequency': exp.get('polling_frequency'), 
+                'timestamp': exp.get('timestamp')
+            }
         else:
-            entry = {'config_id': exp[0], 'random_seed': exp[1], 'generator_type': exp[2], 'total_collisions': exp[3], 'polling_frequency': exp[4], 'timestamp': exp[5], 'name': exp[8] if len(exp) > 8 else None}
+            entry = {
+                'config_id': exp[0], 
+                'random_seed': exp[1], 
+                'generator_type': exp[2], 
+                'total_collisions': exp[3], 
+                'polling_frequency': exp[4], 
+                'timestamp': exp[5], 
+                'name': exp[8] if len(exp) > 8 else None
+            }
         result['experiments'].append(entry)
     return jsonify(result)
 

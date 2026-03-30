@@ -708,13 +708,27 @@ def generate_multi_dendrogram():
         data = request.get_json()
         ids = data.get('experiment_ids', [])
         
+      
+        user_limit = data.get('limit', 20) 
+        
+        if len(ids) < 2:
+            return jsonify({'status': 'error', 'message': 'Please select at least two experiments to compare.'}), 400
+
         from .plotting import create_multi_experiment_dendrogram 
-        script, div = create_multi_experiment_dendrogram(ids)
+        
+        
+        script, div = create_multi_experiment_dendrogram(ids, limit=user_limit)
         
         import re
         clean_script = re.sub(r'<script[^>]*>', '', script).replace("</script>", "")
-        return jsonify({'status': 'success', 'script': clean_script, 'div': div})
+        
+        return jsonify({
+            'status': 'success', 
+            'script': clean_script, 
+            'div': div
+        })
     except Exception as e:
+        print(f"Error generating dendrogram: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 

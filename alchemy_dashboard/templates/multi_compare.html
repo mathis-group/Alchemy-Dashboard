@@ -48,6 +48,16 @@
                         Fetching Database...
                     </div>
                 </div>
+
+                <div class="form-group mb-3 px-3">
+                    <label class="form-label fw-bold small text-uppercase">Sample Size (Top Survivors)</label>
+                    <select id="sample-size" class="form-select form-select-sm">
+                        <option value="10">Top 10 Molecules</option>
+                        <option value="20" selected>Top 20 Molecules</option>
+                        <option value="30">Top 30 Molecules</option>
+                    </select>
+                </div>
+
                 <div class="card-footer bg-white">
                     <button class="btn btn-primary w-100 fw-bold" id="run-btn" onclick="runMultiCompare()">
                         Generate Global Dendrogram Tree
@@ -119,6 +129,8 @@
     function runMultiCompare() {
         const selected = Array.from(document.querySelectorAll('.experiment-row.selected'))
             .map(r => parseInt(r.dataset.id));
+        const topN = parseInt(document.getElementById('sample-size').value);
+
 
         if (selected.length < 2) {
             alert("Please select at least 2 experiments to compare.");
@@ -131,7 +143,7 @@
         fetch('/api/generate_multi_dendrogram', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ experiment_ids: selected })
+            body: JSON.stringify({ experiment_ids: selected, limit: topN})
         })
             .then(res => res.json())
             .then(data => {

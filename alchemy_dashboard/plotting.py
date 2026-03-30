@@ -607,7 +607,7 @@ def ASTErr(message):
 
 # multiple experiment dendrogram
 
-def create_multi_experiment_dendrogram(config_ids):
+def create_multi_experiment_dendrogram(config_ids, limit=20):
     from scipy.cluster.hierarchy import linkage, dendrogram
     import pandas as pd
     import numpy as np
@@ -619,67 +619,94 @@ def create_multi_experiment_dendrogram(config_ids):
     from bokeh.models import ColumnDataSource, HoverTool
     from .db_utils import get_comparison_data
 
-    # gather expressions and map every experiment they appear in 
-    # Expression, Value: List of Exp IDs
-    molecule_origins = {} 
-    for cid in config_ids:
-        df = get_comparison_data(cid, most=50) 
-        if not df.empty:
-            for expr in df['expression'].unique():
-                if expr not in molecule_origins:
-                    molecule_origins[expr] = []
-                molecule_origins[expr].append(str(cid))
+    PALETTE = ["#4F46E5", "#EF4444", "#10B981", "#F59E0B", "#8B5CF6", "#EC4899", "#06B6D4"]
     
-    unique_list = list(molecule_origins.keys())
-    if not unique_list:
-        raise ValueError("No genomic data found.")
+    molecule_metadata = []
+    seen_expressions = {} 
 
-    # Calculate distance matrix
+    #gather data using user defined molecules
+    for i, cid in enumerate(config_ids):
+        df = get_comparison_data(cid, most=limit) 
+        if not df.empty:
+            color = PALETTE[i % len(PALETTE)]
+            for expr in df['expression'].unique():
+                if expr not in seen_expressions:
+                    seen_expressions[expr] = {'origins': [], 'colors': []}
+                seen_expressions[expr]['origins'].append(f"Exp {cid}")
+                seen_expressions[expr]['colors'].append(color)
+
+    unique_list = list(seen_expressions.keys())
+    
+    # matrix math
     dist_matrix = pairwise_distances(
         np.array(unique_list).reshape(-1, 1), 
         metric=lambda x, y: Levenshtein.distance(str(x[0]), str(y[0]))
     )
-    
     Z = linkage(squareform(dist_matrix), method='average')
     ddata = dendrogram(Z, no_plot=True)
     
-    p = figure(title="Cross-Experiment Dendrogram Tree", 
+    p = figure(title=f"Dendrogram: (Top {limit} Survivors)", 
                height=600, sizing_mode="stretch_width",
                toolbar_location="above", tools="pan,wheel_zoom,reset,save")
     
     # draw branches
     source = ColumnDataSource(data={'xs': ddata['icoord'], 'ys': ddata['dcoord']})
-    p.multi_line('xs', 'ys', source=source, color="#10B981", line_width=2)
+    p.multi_line('xs', 'ys', source=source, color="black", line_width=1.5)
 
-    # hover data
+
+    # If a molecule is shared color grey
+    # If it's unique use specific experiment color
     leaves = ddata['leaves']
     ordered_labels = [unique_list[leaf] for leaf in leaves]
     
-    # display strings
-    display_origins = []
-    node_colors = []
+    final_colors = []
+    final_origins = []
     
     for label in ordered_labels:
-        ids = molecule_origins[label]
-        if len(ids) > 1:
-            # if shared highlight it red
-            display_origins.append(f"SHARED: {', '.join(ids)}")
-            node_colors.append("#f87171") 
+        data = seen_expressions[label]
+        if len(data['origins']) > 1:
+            final_colors.append("#1e293b")
+            final_origins.append(f"SHARED: {', '.join(data['origins'])}")
         else:
-            display_origins.append(f"Exp {ids[0]}")
-            node_colors.append("#10B981")
-    
+            final_colors.append(data['colors'][0]) 
+            final_origins.append(data['origins'][0])
+
     leaf_source = ColumnDataSource(data={
         'x': [(i * 10) + 5 for i in range(len(ordered_labels))],
         'y': [0] * len(ordered_labels),
         'detail': ordered_labels,
-        'origin': display_origins,
-        'color': node_colors
+        'origin': final_origins,
+        'color': final_colors
     })
     
-    # draw leaf dots
     leaf_renderer = p.circle('x', 'y', source=leaf_source, size=12, 
                              color='color', line_color="white", line_width=1)
+
+    #legend logic 
+    legend_items = []
+    
+    # add key item from each experiment
+    for i, cid in enumerate(config_ids):
+        color = PALETTE[i % len(PALETTE)]
+        dummy_glyph = p.circle(x=[float('nan')], y=[float('nan')], size=10, color=color, line_color="white")
+        legend_items.append((f"Exp {cid} (Unique)", [dummy_glyph]))
+        
+    # key for shared molecules
+    dummy_shared = p.circle(x=[float('nan')], y=[float('nan')], size=10, color="#1e293b", line_color="white")
+    legend_items.append(("Convergent (Shared)", [dummy_shared]))
+    
+    # assemble legend
+    from bokeh.models import Legend 
+    
+    legend = Legend(
+        items=legend_items, 
+        title="Origin Key",
+        title_text_font_style="bold",
+        background_fill_color="#f8fafc",
+        border_line_color="#cbd5e1",
+        padding=10
+    )
+    p.add_layout(legend, 'right')
 
     # tooltip with expression and origin info
     hover_html = """

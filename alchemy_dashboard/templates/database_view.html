@@ -628,8 +628,8 @@ document.addEventListener("DOMContentLoaded", function() {
                 data.experiments.forEach(exp => {
                     const option = document.createElement('option');
                     option.value = exp.config_id;
-                    const displayName = exp.name ? 
-                        `${exp.name} (ID: ${exp.config_id})` : 
+                    const displayName = exp.name ?
+                        `${exp.name} (ID: ${exp.config_id})` :
                         `Experiment ${exp.config_id}: ${exp.generator_type}`;
                     option.textContent = displayName;
                     if (String(exp.config_id) === String(window.currentConfigID)) {
@@ -732,7 +732,7 @@ if (experimentDropdown) {
                     const details = data.details;
                     const expressions = data.expressions;
 
-                    document.getElementById('experiment-name-display').textContent = 
+                    document.getElementById('experiment-name-display').textContent =
                         details.name || `Experiment ${experimentId}`;
 
                     const generatorTypeSpan = document.getElementById('generator-type');
@@ -851,7 +851,7 @@ if (histogramForm) {
             })
             .catch(error => {
                 console.error('Error fetching histogram:', error);
-                document.getElementById('histogram-content').innerHTML = 
+                document.getElementById('histogram-content').innerHTML =
                     '<p style="color: red;">Error loading histogram. Please try again.</p>';
             });
     });
@@ -861,12 +861,12 @@ if (histogramForm) {
 function populateASTExpressions() {
     const expressionSelect = document.getElementById('ast-expression-select');
     const expressionList = document.getElementById('initial-expression-list');
-    
+
     if (!expressionSelect || !expressionList) return;
-  
+
     expressionSelect.innerHTML = '<option value="">-- Select an expression --</option>';
-    
-    
+
+
     const expressionItems = expressionList.querySelectorAll('.lambda-item');
     expressionItems.forEach(item => {
         const expression = item.textContent.trim();
@@ -877,7 +877,7 @@ function populateASTExpressions() {
             expressionSelect.appendChild(option);
         }
     });
-    
+
     console.log(`Populated ${expressionItems.length} expressions for AST visualization`);
 }
 
@@ -893,7 +893,7 @@ function setupASTVisualization() {
 
     if (!astForm || !expressionSelect) return;
 
-  
+
     expressionSelect.addEventListener('change', function() {
         if (visualizeBtn) {
             visualizeBtn.disabled = !this.value;
@@ -904,10 +904,10 @@ function setupASTVisualization() {
     astForm.addEventListener('submit', function(e) {
         e.preventDefault();
         const expression = expressionSelect.value;
-        
+
         if (!expression) return;
 
-   
+
         container.innerHTML = `
             <div style="text-align: center; padding: 2rem;">
                 <i class="fas fa-spinner fa-spin"></i>
@@ -925,11 +925,11 @@ function setupASTVisualization() {
           const container = document.getElementById('ast-visualization-container');
 
     if (data.status === 'success') {
- 
+
         container.innerHTML = '';
-        
-   
-        container.innerHTML = data.div; 
+
+
+        container.innerHTML = data.div;
 
         const script = document.createElement('script');
         script.textContent = data.script;
@@ -938,14 +938,14 @@ function setupASTVisualization() {
         if (existingScript) {
             existingScript.remove();
         }
-        
+
         script.id = 'bokeh-plot-script';
-        
-    
+
+
         document.body.appendChild(script);
 
         window.dispatchEvent(new Event('resize'));
-        
+
         console.log('AST visualization rendered successfully');
     } else {
         container.innerHTML = `<div class=\"alert alert-error\">${data.message}</div>`;
@@ -980,7 +980,7 @@ function setupASTVisualization() {
 
                     const checkExist = setInterval(() => {
                         if (document.getElementById(bokehId)) {
-                            clearInterval(checkExist); 
+                            clearInterval(checkExist);
                             const script = document.createElement('script');
                             script.textContent = data.script;
                             script.setAttribute('data-bokeh-dist', 'true');
@@ -1029,7 +1029,7 @@ function setupASTVisualization() {
         }
     });
 
-   
+
 
 </script>
 {% endblock %} 

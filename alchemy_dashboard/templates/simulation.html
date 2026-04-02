@@ -21,10 +21,30 @@
                         <i class="fas fa-redo"></i>
                         Continuing from <span id="continuation-banner-name"></span>
                     </div>
+                    <!--Add logic for new experiment-->
+                    <div class="card mb-4 border-warning bg-light">
+                        <div class="card-body py-3">
+                            <label class="form-label fw-bold text-uppercase small text-warning">
+                                <i></i> Recursive Seeding
+                            </label>
+                            <select class="form-control form-control-sm" name="recursive_parent_id" id="recursive-parent-id">
+                                <option value="">No parent</option>
+                            </select>
+                            <div class="form-text mt-1 small">
+                                Run up to 10 recursions from the parent experiment.
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label fw-bold text-primary">Number of recursions</label>
+                        <input class="form-control border-primary" type="number" name="num_generations" value="1" min="1" max="10" id="num-generations"/>
+                        <small class="text-muted">Automatically re-run survivors this many times in a row.</small>
+                    </div>
 
                     <div class="form-group">
                         <label class="form-label">Experiment Name</label>
-                        <input class="form-control" type="text" name="experiment_name" placeholder="Optional - give your experiment a name" id="experiment-name"/>
+                        <input class="form-control" type="text" name="experiment_name" placeholder="Optional - give your experiment a name" id="experiment-name" />
                     </div>
 
                     <div class="form-group" id="continuation-settings" style="display: none;">
@@ -34,19 +54,19 @@
 
                     <div class="form-group">
                         <label class="form-label">Total Collisions</label>
-                        <input class="form-control" type="number" name="total_collisions" value="1000" id="total-collisions"/>
+                        <input class="form-control" type="number" name="total_collisions" value="1000" id="total-collisions" />
                     </div>
-                    
+
                     <div class="form-group">
                         <label class="form-label">Polling Frequency</label>
-                        <input class="form-control" type="number" name="polling_frequency" value="10" id="polling-frequency"/>
+                        <input class="form-control" type="number" name="polling_frequency" value="10" id="polling-frequency" />
                     </div>
-                    
+
                     <div class="form-group">
                         <label class="form-label">Random Seed</label>
-                        <input class="form-control" type="number" name="random_seed" value="42"/>
+                        <input class="form-control" type="number" name="random_seed" value="42" />
                     </div>
-                    
+
                     <div class="form-group">
                         <label class="form-label">Generator Type</label>
                         <select class="form-control" name="generator_type" id="generator-type">
@@ -55,20 +75,20 @@
                             <option value="Fontana" selected>Fontana</option>
                         </select>
                     </div>
-                    
+
                     <!-- BTree Options -->
                     <div id="btree-options" style="display: none;">
                         <div class="form-group">
                             <label class="form-label">Size</label>
-                            <input class="form-control" type="number" name="btree_size" value="5"/>
+                            <input class="form-control" type="number" name="btree_size" value="5" />
                         </div>
                         <div class="form-group">
                             <label class="form-label">Free Variable Probability</label>
-                            <input class="form-control" type="number" name="freevar_probability" value="0.5" step="0.1"/>
+                            <input class="form-control" type="number" name="freevar_probability" value="0.5" step="0.1" />
                         </div>
                         <div class="form-group">
                             <label class="form-label">Max Free Variables</label>
-                            <input class="form-control" type="number" name="max_free_vars" value="3"/>
+                            <input class="form-control" type="number" name="max_free_vars" value="3" />
                         </div>
                         <div class="form-group">
                             <label class="form-label">Standardization</label>
@@ -80,74 +100,74 @@
                         </div>
                         <div class="form-group">
                             <label class="form-label">Number of Expressions</label>
-                            <input class="form-control" type="number" name="num_expressions" value="10"/>
+                            <input class="form-control" type="number" name="num_expressions" value="10" />
                         </div>
                     </div>
-                    
+
                     <!-- Fontana Options -->
                     <div id="fontana-options">
                         <div class="form-group">
                             <label class="form-label">Abstraction Range</label>
                             <div class="input-group">
-                                <input class="form-control" type="number" name="abs_low" value="0.1" step="0.1"/>
-                                <input class="form-control" type="number" name="abs_high" value="0.5" step="0.1"/>
+                                <input class="form-control" type="number" name="abs_low" value="0.1" step="0.1" />
+                                <input class="form-control" type="number" name="abs_high" value="0.5" step="0.1" />
                             </div>
                         </div>
                         <div class="form-group">
                             <label class="form-label">Application Range</label>
                             <div class="input-group">
-                                <input class="form-control" type="number" name="app_low" value="0.2" step="0.1"/>
-                                <input class="form-control" type="number" name="app_high" value="0.6" step="0.1"/>
+                                <input class="form-control" type="number" name="app_low" value="0.2" step="0.1" />
+                                <input class="form-control" type="number" name="app_high" value="0.6" step="0.1" />
                             </div>
                         </div>
                         <div class="form-group">
                             <label class="form-label">Max Depth</label>
-                            <input class="form-control" type="number" name="max_depth" value="5"/>
+                            <input class="form-control" type="number" name="max_depth" value="5" />
                         </div>
                         <div class="form-group">
                             <label class="form-label">Min Depth</label>
-                            <input class="form-control" type="number" name="min_depth" value="1" min="0"/>
+                            <input class="form-control" type="number" name="min_depth" value="1" min="0" />
                         </div>
                         <div class="form-group">
                             <label class="form-label">Max Free Variables</label>
-                            <input class="form-control" type="number" name="fontana_max_fv" value="2"/>
+                            <input class="form-control" type="number" name="fontana_max_fv" value="2" />
                         </div>
                         <div class="form-group">
                             <label class="form-label">Free Variable Probability</label>
-                            <input class="form-control" type="number" name="free_variable_probability" value="0.5" step="0.05" min="0" max="1"/>
+                            <input class="form-control" type="number" name="free_variable_probability" value="0.5" step="0.05" min="0" max="1" />
                         </div>
                         <div class="form-group">
                             <label class="form-label">Initial Expression Count</label>
-                            <input class="form-control" type="number" name="fontana_expression_count" value="10" min="1"/>
+                            <input class="form-control" type="number" name="fontana_expression_count" value="10" min="1" />
                         </div>
                     </div>
-                    
+
                     <!-- From File Options -->
                     <div id="from-file-options" style="display: none;">
                         <div class="form-group">
                             <label class="form-label">Upload File with Expressions</label>
-                            <input class="form-control" type="file" name="expressions_file"/>
+                            <input class="form-control" type="file" name="expressions_file" />
                         </div>
                         <div class="form-group">
                             <label class="form-label">Or Enter Expressions Directly</label>
                             <textarea class="form-control" name="direct_input" rows="5" placeholder="One expression per line"></textarea>
                         </div>
                     </div>
-                    
+
                     <div class="form-group">
                         <label class="form-label">Measurements</label>
                         <div>
                             <label class="checkbox-item">
-                                <input type="checkbox" name="measurements" value="entropy" checked/>
+                                <input type="checkbox" name="measurements" value="entropy" checked />
                                 <span>Entropy</span>
                             </label>
                             <label class="checkbox-item">
-                                <input type="checkbox" name="measurements" value="unique_expressions" checked/>
+                                <input type="checkbox" name="measurements" value="unique_expressions" checked />
                                 <span>Unique Expressions</span>
                             </label>
                         </div>
                     </div>
-                    
+
                     <button type="submit" class="btn btn-success btn-block">
                         <i class="fas fa-play"></i> Run Simulation
                     </button>
@@ -155,7 +175,7 @@
             </div>
         </div>
     </div>
-    
+
     <div class="simulation-results">
         <div class="card">
             <div class="card-header">
@@ -170,18 +190,18 @@
                     <i class="fas fa-pause-circle status-icon"></i>
                     <span>Ready to Run</span>
                 </div>
-                
+
                 <!-- Loading indicator -->
                 <div id="loading-indicator" style="display: none; text-align: center; padding: 1rem;">
                     <i class="fas fa-spinner fa-spin" style="font-size: 24px; color: var(--primary);"></i>
                     <p style="margin-top: 0.5rem; font-size: 0.9rem;">Running simulation...</p>
                 </div>
-                
+
                 <!-- Success message -->
                 <div id="success-message" class="alert alert-success" style="display: none;">
                     <strong>Success!</strong> <span id="success-message-text"></span>
                 </div>
-                
+
                 <!-- Simulation Summary -->
                 <div id="simulation-summary" class="simulation-summary" style="display: none;">
                     <div class="summary-item">
@@ -217,236 +237,269 @@
 
 {% block scripts %}
 <script>
-const generatorSelect = document.getElementById('generator-type');
-const fractionHiddenInput = document.getElementById('continuation-fraction');
-const fractionDisplayInput = document.getElementById('continuation-fraction-display');
-const continuationSettingsGroup = document.getElementById('continuation-settings');
+    const generatorSelect = document.getElementById('generator-type');
+    const fractionHiddenInput = document.getElementById('continuation-fraction');
+    const fractionDisplayInput = document.getElementById('continuation-fraction-display');
+    const continuationSettingsGroup = document.getElementById('continuation-settings');
 
-function clampFraction(value) {
-    if (isNaN(value)) {
-        return 0;
+    function clampFraction(value) {
+        if (isNaN(value)) {
+            return 0;
+        }
+        return Math.max(0, Math.min(100, value));
     }
-    return Math.max(0, Math.min(100, value));
-}
 
-function toggleGeneratorOptions() {
-    document.getElementById('from-file-options').style.display = 'none';
-    document.getElementById('btree-options').style.display = 'none';
-    document.getElementById('fontana-options').style.display = 'none';
+    function toggleGeneratorOptions() {
+        document.getElementById('from-file-options').style.display = 'none';
+        document.getElementById('btree-options').style.display = 'none';
+        document.getElementById('fontana-options').style.display = 'none';
 
-    const selectedType = generatorSelect.value;
-    if (selectedType === 'from_file') {
-        document.getElementById('from-file-options').style.display = 'block';
-    } else if (selectedType === 'BTree') {
-        document.getElementById('btree-options').style.display = 'block';
-    } else if (selectedType === 'Fontana') {
-        document.getElementById('fontana-options').style.display = 'block';
+        const selectedType = generatorSelect.value;
+        if (selectedType === 'from_file') {
+            document.getElementById('from-file-options').style.display = 'block';
+        } else if (selectedType === 'BTree') {
+            document.getElementById('btree-options').style.display = 'block';
+        } else if (selectedType === 'Fontana') {
+            document.getElementById('fontana-options').style.display = 'block';
+        }
     }
-}
 
-generatorSelect.addEventListener('change', toggleGeneratorOptions);
-toggleGeneratorOptions();
+    generatorSelect.addEventListener('change', toggleGeneratorOptions);
+    toggleGeneratorOptions();
 
-if (fractionDisplayInput) {
-    fractionDisplayInput.addEventListener('input', function() {
-        const clamped = clampFraction(parseFloat(this.value));
-        this.value = clamped;
-        if (fractionHiddenInput) {
+    if (fractionDisplayInput) {
+        fractionDisplayInput.addEventListener('input', function () {
+            const clamped = clampFraction(parseFloat(this.value));
+            this.value = clamped;
+            if (fractionHiddenInput) {
+                fractionHiddenInput.value = clamped;
+            }
+        });
+    }
+
+    function setValue(selector, value) {
+        if (value === undefined || value === null) {
+            return;
+        }
+        const element = document.querySelector(selector);
+        if (element) {
+            element.value = value;
+        }
+    }
+
+    function applyGeneratorParams(generatorType, params) {
+        if (!params) {
+            return;
+        }
+
+        if (generatorType === 'BTree') {
+            setValue('input[name="btree_size"]', params.size);
+            const freevarValue = params.freevar_probability ?? params.freevar_generation_probability;
+            setValue('input[name="freevar_probability"]', freevarValue);
+            setValue('input[name="max_free_vars"]', params.max_free_vars);
+            const standardizationSelect = document.querySelector('select[name="standardization"]');
+            if (standardizationSelect && params.standardization) {
+                standardizationSelect.value = params.standardization;
+            }
+            setValue('input[name="num_expressions"]', params.num_expressions);
+        } else if (generatorType === 'Fontana') {
+            const absLow = params.abs_low ?? (Array.isArray(params.abs_range) ? params.abs_range[0] : undefined);
+            const absHigh = params.abs_high ?? (Array.isArray(params.abs_range) ? params.abs_range[1] : undefined);
+            const appLow = params.app_low ?? (Array.isArray(params.app_range) ? params.app_range[0] : undefined);
+            const appHigh = params.app_high ?? (Array.isArray(params.app_range) ? params.app_range[1] : undefined);
+            setValue('input[name="abs_low"]', absLow);
+            setValue('input[name="abs_high"]', absHigh);
+            setValue('input[name="app_low"]', appLow);
+            setValue('input[name="app_high"]', appHigh);
+            setValue('input[name="max_depth"]', params.max_depth);
+            const minDepth = params.min_depth ?? params.minDepth;
+            setValue('input[name="min_depth"]', minDepth);
+            setValue('input[name="fontana_max_fv"]', params.max_free_vars ?? params.fontana_max_fv);
+            const freeVarProb = params.free_variable_probability ?? params.freevar_probability;
+            setValue('input[name="free_variable_probability"]', freeVarProb);
+            const expressionCount = params.initial_expression_count ?? params.expression_count;
+            setValue('input[name="fontana_expression_count"]', expressionCount);
+        }
+    }
+
+    function applyContinuationParams() {
+        const urlParams = new URLSearchParams(window.location.search);
+        const continueFrom = urlParams.get('continue_from');
+        if (!continueFrom) {
+            return;
+        }
+
+
+
+        const requestedFraction = parseFloat(urlParams.get('fraction') || '');
+        fetch(`/api/continuation_config/${continueFrom}`)
+            .then(res => res.json())
+            .then(data => {
+                if (data.status !== 'success') {
+                    console.error('Continuation config error:', data.message);
+                    return;
+                }
+
+                const fallbackFraction = data.default_fraction != null ? data.default_fraction * 100 : 50;
+                const fractionPercent = clampFraction(isNaN(requestedFraction) ? fallbackFraction : requestedFraction);
+
+                if (fractionHiddenInput) {
+                    fractionHiddenInput.value = fractionPercent;
+                }
+                if (fractionDisplayInput && continuationSettingsGroup) {
+                    continuationSettingsGroup.style.display = 'block';
+                    fractionDisplayInput.value = fractionPercent;
+                }
+
+                const parentInput = document.getElementById('continuation-parent-id');
+                if (parentInput) {
+                    parentInput.value = data.config_id;
+                }
+
+                const banner = document.getElementById('continuation-banner');
+                const bannerName = document.getElementById('continuation-banner-name');
+                if (banner) {
+                    banner.style.display = 'block';
+                    if (bannerName) {
+                        bannerName.textContent = `${data.name} (ID ${data.config_id})`;
+                    }
+                }
+
+                setValue('#experiment-name', `${data.name} (continued)`);
+                setValue('#total-collisions', data.total_collisions);
+                setValue('#polling-frequency', data.polling_frequency);
+                setValue('input[name="random_seed"]', data.random_seed);
+
+                generatorSelect.value = data.generator_type;
+                generatorSelect.dispatchEvent(new Event('change'));
+                applyGeneratorParams(data.generator_type, data.generator_params);
+            })
+            .catch(err => console.error('Failed to apply continuation params:', err));
+    }
+
+    applyContinuationParams();
+
+    // Load experiments for recursive dropdown
+    const recursiveDropdown = document.getElementById('recursive-parent-id');
+    const seedInput = document.querySelector('input[name="random_seed"]');
+    const genSelect = document.getElementById('generator-type');
+
+    if (recursiveDropdown) {
+        fetch('/list_experiments')
+            .then(res => res.json())
+            .then(data => {
+                data.experiments.forEach(exp => {
+                    const opt = document.createElement('option');
+                    opt.value = exp.config_id;
+                    opt.textContent = `${exp.name || 'Exp ' + exp.config_id} (Seed: ${exp.random_seed})`;
+                    recursiveDropdown.appendChild(opt);
+                });
+            });
+
+        // Lock inputs if a parent is selected
+        recursiveDropdown.addEventListener('change', function () {
+            const isRecursive = !!this.value;
+            seedInput.disabled = isRecursive;
+            genSelect.disabled = isRecursive;
+            if (isRecursive) {
+                document.getElementById('experiment-name').value = `Recursive Run from ID ${this.value}`;
+            }
+        });
+    }
+
+
+    const simulationForm = document.getElementById('simulation-form');
+    simulationForm.addEventListener('submit', function (e) {
+        e.preventDefault();
+
+        if (fractionDisplayInput && fractionHiddenInput) {
+            const clamped = clampFraction(parseFloat(fractionDisplayInput.value));
+            fractionDisplayInput.value = clamped;
             fractionHiddenInput.value = clamped;
         }
-    });
-}
 
-function setValue(selector, value) {
-    if (value === undefined || value === null) {
-        return;
-    }
-    const element = document.querySelector(selector);
-    if (element) {
-        element.value = value;
-    }
-}
+        const simulationStatus = document.getElementById('simulation-status');
+        const loadingIndicator = document.getElementById('loading-indicator');
+        const successMessage = document.getElementById('success-message');
+        const successMessageText = document.getElementById('success-message-text');
+        const simulationSummary = document.getElementById('simulation-summary');
+        const viewExperimentLink = document.getElementById('view-experiment-link');
 
-function applyGeneratorParams(generatorType, params) {
-    if (!params) {
-        return;
-    }
+        simulationStatus.className = 'simulation-status running';
+        simulationStatus.innerHTML = '<i class="fas fa-spinner fa-spin status-icon"></i><span>Running Simulation...</span>';
 
-    if (generatorType === 'BTree') {
-        setValue('input[name="btree_size"]', params.size);
-        const freevarValue = params.freevar_probability ?? params.freevar_generation_probability;
-        setValue('input[name="freevar_probability"]', freevarValue);
-        setValue('input[name="max_free_vars"]', params.max_free_vars);
-        const standardizationSelect = document.querySelector('select[name="standardization"]');
-        if (standardizationSelect && params.standardization) {
-            standardizationSelect.value = params.standardization;
-        }
-        setValue('input[name="num_expressions"]', params.num_expressions);
-    } else if (generatorType === 'Fontana') {
-        const absLow = params.abs_low ?? (Array.isArray(params.abs_range) ? params.abs_range[0] : undefined);
-        const absHigh = params.abs_high ?? (Array.isArray(params.abs_range) ? params.abs_range[1] : undefined);
-        const appLow = params.app_low ?? (Array.isArray(params.app_range) ? params.app_range[0] : undefined);
-        const appHigh = params.app_high ?? (Array.isArray(params.app_range) ? params.app_range[1] : undefined);
-        setValue('input[name="abs_low"]', absLow);
-        setValue('input[name="abs_high"]', absHigh);
-        setValue('input[name="app_low"]', appLow);
-        setValue('input[name="app_high"]', appHigh);
-        setValue('input[name="max_depth"]', params.max_depth);
-        const minDepth = params.min_depth ?? params.minDepth;
-        setValue('input[name="min_depth"]', minDepth);
-        setValue('input[name="fontana_max_fv"]', params.max_free_vars ?? params.fontana_max_fv);
-        const freeVarProb = params.free_variable_probability ?? params.freevar_probability;
-        setValue('input[name="free_variable_probability"]', freeVarProb);
-        const expressionCount = params.initial_expression_count ?? params.expression_count;
-        setValue('input[name="fontana_expression_count"]', expressionCount);
-    }
-}
+        loadingIndicator.style.display = 'block';
+        successMessage.style.display = 'none';
+        simulationSummary.style.display = 'none';
+        viewExperimentLink.style.display = 'none';
 
-function applyContinuationParams() {
-    const urlParams = new URLSearchParams(window.location.search);
-    const continueFrom = urlParams.get('continue_from');
-    if (!continueFrom) {
-        return;
-    }
+        const formData = new FormData(this);
 
-    const requestedFraction = parseFloat(urlParams.get('fraction') || '');
-    fetch(`/api/continuation_config/${continueFrom}`)
-        .then(res => res.json())
-        .then(data => {
-            if (data.status !== 'success') {
-                console.error('Continuation config error:', data.message);
-                return;
-            }
+        if (document.getElementById('recursive-parent-id').value) { formData.set('generator_type', 'from_file'); }
 
-            const fallbackFraction = data.default_fraction != null ? data.default_fraction * 100 : 50;
-            const fractionPercent = clampFraction(isNaN(requestedFraction) ? fallbackFraction : requestedFraction);
-
-            if (fractionHiddenInput) {
-                fractionHiddenInput.value = fractionPercent;
-            }
-            if (fractionDisplayInput && continuationSettingsGroup) {
-                continuationSettingsGroup.style.display = 'block';
-                fractionDisplayInput.value = fractionPercent;
-            }
-
-            const parentInput = document.getElementById('continuation-parent-id');
-            if (parentInput) {
-                parentInput.value = data.config_id;
-            }
-
-            const banner = document.getElementById('continuation-banner');
-            const bannerName = document.getElementById('continuation-banner-name');
-            if (banner) {
-                banner.style.display = 'block';
-                if (bannerName) {
-                    bannerName.textContent = `${data.name} (ID ${data.config_id})`;
-                }
-            }
-
-            setValue('#experiment-name', `${data.name} (continued)`);
-            setValue('#total-collisions', data.total_collisions);
-            setValue('#polling-frequency', data.polling_frequency);
-            setValue('input[name="random_seed"]', data.random_seed);
-
-            generatorSelect.value = data.generator_type;
-            generatorSelect.dispatchEvent(new Event('change'));
-            applyGeneratorParams(data.generator_type, data.generator_params);
+        fetch(this.action, {
+            method: 'POST',
+            body: formData
         })
-        .catch(err => console.error('Failed to apply continuation params:', err));
-}
+            .then(response => response.json())
+            .then(data => {
+                loadingIndicator.style.display = 'none';
 
-applyContinuationParams();
+                if (data.status === 'error') {
+                    throw new Error(data.message);
+                }
 
-const simulationForm = document.getElementById('simulation-form');
-simulationForm.addEventListener('submit', function(e) {
-    e.preventDefault();
+                simulationStatus.className = 'simulation-status completed';
+                simulationStatus.innerHTML = '<i class="fas fa-check-circle status-icon"></i><span>Simulation Complete!</span>';
 
-    if (fractionDisplayInput && fractionHiddenInput) {
-        const clamped = clampFraction(parseFloat(fractionDisplayInput.value));
-        fractionDisplayInput.value = clamped;
-        fractionHiddenInput.value = clamped;
-    }
+                successMessageText.textContent = data.message;
+                successMessage.style.display = 'block';
 
-    const simulationStatus = document.getElementById('simulation-status');
-    const loadingIndicator = document.getElementById('loading-indicator');
-    const successMessage = document.getElementById('success-message');
-    const successMessageText = document.getElementById('success-message-text');
-    const simulationSummary = document.getElementById('simulation-summary');
-    const viewExperimentLink = document.getElementById('view-experiment-link');
+                const selectedGeneratorLabel = generatorSelect.options[generatorSelect.selectedIndex].text;
+                document.getElementById('summary-generator').textContent = selectedGeneratorLabel;
+                document.getElementById('summary-collisions').textContent = document.getElementById('total-collisions').value;
 
-    simulationStatus.className = 'simulation-status running';
-    simulationStatus.innerHTML = '<i class="fas fa-spinner fa-spin status-icon"></i><span>Running Simulation...</span>';
+                const continuationSummary = data.continuation_summary;
+                const expressionsItem = document.querySelector('[data-summary="expressions"]');
+                const summaryExpressions = document.getElementById('summary-expressions');
+                if (expressionsItem && summaryExpressions) {
+                    if (continuationSummary && continuationSummary.parent_config_id) {
+                        expressionsItem.style.display = 'none';
+                    } else {
+                        expressionsItem.style.display = '';
+                        const baseCount = (typeof data.initial_expression_count === 'number') ? data.initial_expression_count : 'N/A';
+                        summaryExpressions.textContent = baseCount;
+                    }
+                }
 
-    loadingIndicator.style.display = 'block';
-    successMessage.style.display = 'none';
-    simulationSummary.style.display = 'none';
-    viewExperimentLink.style.display = 'none';
+                document.getElementById('summary-name').textContent = data.experiment_name || 'Unnamed';
 
-    const formData = new FormData(this);
+                viewExperimentLink.href = '/view_experiment/' + data.config_id;
+                viewExperimentLink.style.display = 'flex';
 
-    fetch(this.action, {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => response.json())
-    .then(data => {
-        loadingIndicator.style.display = 'none';
+                const downloadInitialLink = document.getElementById('download-initial-state-link');
+                if (downloadInitialLink) {
+                    if (continuationSummary && continuationSummary.parent_config_id && data.download_initial_state_url) {
+                        downloadInitialLink.href = data.download_initial_state_url;
+                        downloadInitialLink.style.display = 'flex';
+                    } else {
+                        downloadInitialLink.style.display = 'none';
+                    }
+                }
 
-        if (data.status === 'error') {
-            throw new Error(data.message);
-        }
+                simulationSummary.style.display = 'block';
 
-        simulationStatus.className = 'simulation-status completed';
-        simulationStatus.innerHTML = '<i class="fas fa-check-circle status-icon"></i><span>Simulation Complete!</span>';
+                document.querySelector('.simulation-results').scrollIntoView({ behavior: 'smooth' });
+            })
+            .catch(error => {
+                loadingIndicator.style.display = 'none';
 
-        successMessageText.textContent = data.message;
-        successMessage.style.display = 'block';
+                simulationStatus.className = 'simulation-status error';
+                simulationStatus.innerHTML = '<i class="fas fa-exclamation-triangle status-icon"></i><span>Simulation Failed</span>';
 
-        const selectedGeneratorLabel = generatorSelect.options[generatorSelect.selectedIndex].text;
-        document.getElementById('summary-generator').textContent = selectedGeneratorLabel;
-        document.getElementById('summary-collisions').textContent = document.getElementById('total-collisions').value;
-
-        const continuationSummary = data.continuation_summary;
-        const expressionsItem = document.querySelector('[data-summary="expressions"]');
-        const summaryExpressions = document.getElementById('summary-expressions');
-        if (expressionsItem && summaryExpressions) {
-            if (continuationSummary && continuationSummary.parent_config_id) {
-                expressionsItem.style.display = 'none';
-            } else {
-                expressionsItem.style.display = '';
-                const baseCount = (typeof data.initial_expression_count === 'number') ? data.initial_expression_count : 'N/A';
-                summaryExpressions.textContent = baseCount;
-            }
-        }
-
-        document.getElementById('summary-name').textContent = data.experiment_name || 'Unnamed';
-
-        viewExperimentLink.href = '/view_experiment/' + data.config_id;
-        viewExperimentLink.style.display = 'flex';
-
-        const downloadInitialLink = document.getElementById('download-initial-state-link');
-        if (downloadInitialLink) {
-            if (continuationSummary && continuationSummary.parent_config_id && data.download_initial_state_url) {
-                downloadInitialLink.href = data.download_initial_state_url;
-                downloadInitialLink.style.display = 'flex';
-            } else {
-                downloadInitialLink.style.display = 'none';
-            }
-        }
-
-        simulationSummary.style.display = 'block';
-
-        document.querySelector('.simulation-results').scrollIntoView({ behavior: 'smooth' });
-    })
-    .catch(error => {
-        loadingIndicator.style.display = 'none';
-
-        simulationStatus.className = 'simulation-status error';
-        simulationStatus.innerHTML = '<i class="fas fa-exclamation-triangle status-icon"></i><span>Simulation Failed</span>';
-
-        console.error('Error:', error);
-        alert('Error running simulation: ' + error.message);
+                console.error('Error:', error);
+                alert('Error running simulation: ' + error.message);
+            });
     });
-});
 </script>
 {% endblock %} 

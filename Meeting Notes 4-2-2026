@@ -1,0 +1,22 @@
+Nadya:
+- Suggestion: outgroup-> in traditional phylogenetic analysis you add an outgroup (like an archea as a randomized control)
+Run another experiment with completely differnt expressions or generate a bunch of random expressions -> randomized control experiment
+Dev:
+- one algorithimic change should be mde in the rust library-> make comparison to original alchemy easier
+- in original alchemy code-> when you run 1000 expressions have it run duplicates 
+- keep defualt behavior in dashboard-> toggle between creating new expressions
+
+
+
+some ideas:
+- add a reaction-> see how reactions effect trees, reaction graph essentially 
+-Simulations with no fewer than 1,000 expressions, at least 10,000 expressions
+- ideal number of collisions: bigger is better however finite computers so 10,000 expresisons with 1,000 collisions is okay for now-> if that is too slow go down to 1,000 expressions and 1,000 collisions 
+
+Next week: 
+- Try to make major progress, come back to markdown document and begin writing based on literature review and experiments ran 
+possible journals to submit to:
+- plos journal: https://journals.plos.org/ploscompbiol/
+- Nature complexity journal: https://www.nature.com/npjcomplex/
+- We can draft and send to ALife next year
+- https://ccs26.cssociety.

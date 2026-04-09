@@ -151,14 +151,14 @@ def create_multi_experiment_dendrogram(config_ids, mode='ward'):
         return components(p)
 
     elif mode == 'edit':
-        # --- MICRO GENETICS COMPARISON (LEVENSHTEIN) ---
+        #Levenstein 
         from scipy.spatial.distance import squareform
         from sklearn.metrics import pairwise_distances
         from bokeh.models import ColumnDataSource, HoverTool
 
         all_unique_expressions = set()
         
-        # Pool the top 50 survivors from EVERY selected experiment
+        # Top 50 survivors from very experiment
         for cid in config_ids:
             df = get_comparison_data(cid, most=50) 
             if not df.empty:
@@ -186,7 +186,7 @@ def create_multi_experiment_dendrogram(config_ids, mode='ward'):
         source = ColumnDataSource(data={'xs': ddata['icoord'], 'ys': ddata['dcoord']})
         p.multi_line('xs', 'ys', source=source, color="#10B981", line_width=2, alpha=0.8)
         
-        # Add the HoverTool so you can see the molecules on the X-axis
+     
         labels = unique_molecules
         leaves = ddata['leaves']
         ordered_labels = [labels[leaf] for leaf in leaves]

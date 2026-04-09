@@ -375,6 +375,23 @@ def delete_experiment(config_id):
     finally:
         conn.close()
 
+
+def reset_database_counters():
+    """Wipes the SQLite memory of old IDs so the next experiment starts at 1."""
+    conn = sqlite3.connect(DB_NAME)
+    cursor = conn.cursor()
+    
+    try:
+        # This clears the internal SQLite tracker for all tables
+        cursor.execute("DELETE FROM sqlite_sequence")
+        conn.commit()
+    except sqlite3.OperationalError:
+        # This happens if no AUTOINCREMENT tables have been used yet; safe to ignore
+        pass
+    finally:
+        conn.close()
+
+
 # If not already present:
 from sqlalchemy.orm import sessionmaker
 

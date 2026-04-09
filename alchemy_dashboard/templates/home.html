@@ -12,26 +12,35 @@
         This interactive dashboard allows you to visualize, analyze, and compare your alchemy experiment data.
         Choose an option from the navigation bar above to get started.
     </p>
+
     <div class="section-divider">
         <div class="section-divider-line"></div>
         <div class="section-divider-text">Key Features</div>
         <div class="section-divider-line"></div>
     </div>
+
     <div class="feature-grid">
-        <div class="feature-card fade-in delay-1">
-            <div class="feature-icon"><i class="fas fa-database"></i></div>
-            <h3 class="feature-title">Database Visualization</h3>
-            <p class="feature-description">
-                Explore experiments stored in your local database with interactive charts and detailed metrics.
-            </p>
-        </div>
-        <div class="feature-card fade-in delay-2">
-            <div class="feature-icon"><i class="fas fa-upload"></i></div>
-            <h3 class="feature-title">Upload Results</h3>
-            <p class="feature-description">
-                Upload JSON result files to visualize and analyze experiment outcomes from any source.
-            </p>
-        </div>
+
+        <a href="/database" style="text-decoration: none; color: inherit; display: block;">
+            <div class="feature-card fade-in delay-1" style="cursor: pointer;">
+                <div class="feature-icon"><i class="fas fa-database"></i></div>
+                <h3 class="feature-title">Database Visualization</h3>
+                <p class="feature-description">
+                    Explore experiments stored in your local database with interactive charts and detailed metrics.
+                </p>
+            </div>
+        </a>
+
+        <a href="/simulation" style="text-decoration: none; color: inherit; display: block;">
+            <div class="feature-card fade-in delay-2" style="cursor: pointer;">
+                <div class="feature-icon"><i class="fas fa-upload"></i></div>
+                <h3 class="feature-title">Upload Results</h3>
+                <p class="feature-description">
+                    Upload initial expression files to run fresh simulations and analyze outcomes.
+                </p>
+            </div>
+        </a>
+
         <a href="/multi_compare" style="text-decoration: none; color: inherit; display: block;">
             <div class="feature-card fade-in delay-3" style="cursor: pointer;">
                 <div class="feature-icon"><i class="fas fa-chart-line"></i></div>
@@ -41,31 +50,41 @@
                 </p>
             </div>
         </a>
-        <div class="feature-card fade-in delay-4">
-            <div class="feature-icon"><i class="fas fa-clock"></i></div>
-            <h3 class="feature-title">Time Series Analysis</h3>
-            <p class="feature-description">
-                Analyze how your experiments evolve over time with specialized visualizations.
-            </p>
-        </div>
-        <div class="feature-card fade-in delay-5">
-            <div class="feature-icon"><i class="fas fa-play"></i></div>
-            <h3 class="feature-title">Run Simulation</h3>
-            <p class="feature-description">
-                Configure and run alchemy experiments directly from the dashboard interface.
-            </p>
-        </div>
-        <div class="feature-card fade-in delay-5">
-            <div class="feature-icon"><i class="fas fa-file-export"></i></div>
-            <h3 class="feature-title">Export &amp; Share</h3>
-            <p class="feature-description">
-                Export results in various formats and share your findings with collaborators.
-            </p>
-        </div>
+
+        <a href="/database" style="text-decoration: none; color: inherit; display: block;">
+            <div class="feature-card fade-in delay-4" style="cursor: pointer;">
+                <div class="feature-icon"><i class="fas fa-clock"></i></div>
+                <h3 class="feature-title">Time Series Analysis</h3>
+                <p class="feature-description">
+                    Analyze how your experiments evolve over time with specialized visualizations.
+                </p>
+            </div>
+        </a>
+
+        <a href="/simulation" style="text-decoration: none; color: inherit; display: block;">
+            <div class="feature-card fade-in delay-5" style="cursor: pointer;">
+                <div class="feature-icon"><i class="fas fa-play"></i></div>
+                <h3 class="feature-title">Run Simulation</h3>
+                <p class="feature-description">
+                    Configure and run alchemy experiments directly from the dashboard interface.
+                </p>
+            </div>
+        </a>
+
+        <a href="/database" style="text-decoration: none; color: inherit; display: block;">
+            <div class="feature-card fade-in delay-5" style="cursor: pointer;">
+                <div class="feature-icon"><i class="fas fa-file-export"></i></div>
+                <h3 class="feature-title">Export &amp; Share</h3>
+                <p class="feature-description">
+                    Export results in various formats and share your findings with collaborators.
+                </p>
+            </div>
+        </a>
+
     </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
 {{ bokeh_script|safe }}
-{% endblock %} 
+{% endblock %}

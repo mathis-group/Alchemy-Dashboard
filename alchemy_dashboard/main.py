@@ -782,6 +782,59 @@ def run_simulation_form():
         print(f"Recursion Loop Error: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
+@app.route('/trigger_invasive_species', methods=['POST'])
+def trigger_invasive_species():
+    try:
+        data = request.get_json()
+        parent_config_id = data.get('config_id')
+        invasive_expr = data.get('expression', '\\x.x')
+        invasive_count = int(data.get('count', 50))
+
+        if not parent_config_id:
+            return jsonify({'status': 'error', 'message': 'Missing config_id'}), 400
+
+        final_state = get_expressions_for_collision(parent_config_id, -1)
+        if not final_state:
+            return jsonify({'status': 'error', 'message': 'No final data found.'}), 404
+
+        survivor_expressions = []
+        for expr, count in final_state:
+            survivor_expressions.extend([expr] * count)
+
+        # Inject the invasive molecules
+        survivor_expressions.extend([invasive_expr] * invasive_count)
+
+        config = {
+            'generator_type': 'from_file', 
+            'expressions': survivor_expressions,
+            'total_collisions': 1000, 
+            'polling_frequency': 10,
+            'random_seed': 42,
+            'experiment_name': f"Invasion: {invasive_expr[:20]} (Parent: {parent_config_id})"
+        }
+
+        result = run_experiment(config)
+        new_id = save_configuration(
+            random_seed=42, generator_type='from_file', 
+            total_collisions=1000, polling_frequency=10, 
+            name=config['experiment_name']
+        )
+
+        for expr, count in Counter(survivor_expressions).items():
+            save_experiment_state(new_id, 0, expr, count)
+
+        metrics = result.get('metrics', [])
+        for metric in metrics:
+            save_averages(new_id, metric['collision_number'], metric['entropy'], metric['unique_expressions'])
+            if 'expressions' in metric:
+                for expr, count in Counter(metric['expressions']).items():
+                    save_experiment_state(new_id, metric['collision_number'], expr, count)
+
+        save_continuation_metadata(new_id, parent_config_id, 1.0, len(survivor_expressions) - invasive_count, invasive_count)
+
+        return jsonify({'status': 'success', 'new_config_id': new_id})
+    except Exception as e:
+        return jsonify({'status': 'error', 'message': str(e)}), 500
 
 @app.route('/dashboard')
 def dashboard():

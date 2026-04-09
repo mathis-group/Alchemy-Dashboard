@@ -305,6 +305,42 @@ def delete_experiment_route():
     except Exception as exc:
         return jsonify({'status': 'error', 'message': str(exc)}), 500
 
+@app.route('/delete_all_experiments', methods=['POST'])
+def delete_all_experiments():
+    try:
+        # Get all current experiments
+        experiments = get_experiment_configs()
+        
+        deleted_count = 0
+        for exp in experiments:
+            config_id = exp['config_id'] if isinstance(exp, dict) else exp[0]
+            if delete_experiment(config_id):
+                deleted_count += 1
+            
+        # Reset the ID counter
+        import sqlite3
+        from .config import DB_NAME
+        conn = sqlite3.connect(DB_NAME) 
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute("DELETE FROM sqlite_sequence") 
+            conn.commit()
+        except sqlite3.OperationalError as e:
+            if "no such table: sqlite_sequence" not in str(e):
+                raise e
+        finally:
+            conn.close()
+        
+        return jsonify({
+            'status': 'success', 
+            'message': f'{deleted_count} experiments deleted and counters reset.'
+        })
+
+    except Exception as e:
+        print(f"Error during mass delete: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
 
 
 @app.route('/debug_db')

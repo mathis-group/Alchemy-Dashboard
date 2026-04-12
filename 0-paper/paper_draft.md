@@ -73,7 +73,23 @@ The Functional Supercollider is exposed to Python through native extensions, ena
 Several visualization tools have been created to enable users to analyze their findings across various experiments.
 1) Entropy graph: this graph plots snapshots of collisions veruss its calculated entropy from metadata provided by the backend collision code. These snapshots are equivalent to time as it represents the state of the soup at a particular collision number. This visualization enables users to understand how disordered their soup of expression gets over each collision and provides a deeper explination as to how populations survive through various entropy points.
 2) Unique Expressions graph: Similar to the previous graph, this visualization takes a look at how many unique expressions are present in each snapshot of collisions in the soup. This allows foor users to see how often new expressions form as more and more collisions take place in the soup enabling for analyzing whether or not a specific environment inhibits or promotes diverse species.
-3) Jaccard Vs Bray-Curtis Dissimilarity Plots:
+3) Jaccard Vs Bray-Curtis Dissimilarity Plots: We decided to put the jaccard vs bray-curtis plots side by side as both are pretty similar, however these graphs gives usuers another visual mode to analyze. The jaccard index Compares if different ecosystem shares similar species (does not care about exact count). it is represented by this equation: |A and B| / |A OR B|.
+This is how it was implemented in python:
+1)Extract names of species from selected snapshots (collision times) and ignore the count
+2)Find all shared and unique species between the snapshots
+3)Calculate jaccard distance (similarity = count(shared_species) / count(all_unique_species))
+The bray curtis dissimilarity compares the quantity of similar species in different ecosystems . It is represented by this equation: <img width="147" height="58" alt="Screenshot 2026-04-12 163249" src="https://github.com/user-attachments/assets/7929600d-46d7-400d-82f0-e7ae2e6a1aa3" />
+This is how it was implemented in python:
+1)Get the counts of all species in each of the snapshots
+2)Calculate the difference between each species count 
+3)Divide difference sum by total sum of species (difference_sum / total_population_sum)
+
+
+
+5) dsfdsfds
+
+
+
 ### Numerical Experiments
 
 #### Motivation, connection to real chemistry

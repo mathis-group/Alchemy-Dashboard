@@ -78,6 +78,7 @@ The Functional Supercollider is exposed to Python through native extensions, ena
 #### Characterizing AlChemy Simulations 
 - Similarity between simulations (Jaccard vs Bray–Curtis)
 - Similarity within simulations (Edit distance for lambda expressions)
+- Similarty of expressions between different simulations (Multi-dendrogram edit distance for lambda expressions) 
 
 #### Initial Conditions, recursive steps, non-recursive controls
 

@@ -75,18 +75,29 @@ Several visualization tools have been created to enable users to analyze their f
 2) Unique Expressions graph: Similar to the previous graph, this visualization takes a look at how many unique expressions are present in each snapshot of collisions in the soup. This allows foor users to see how often new expressions form as more and more collisions take place in the soup enabling for analyzing whether or not a specific environment inhibits or promotes diverse species.
 3) Jaccard Vs Bray-Curtis Dissimilarity Plots: We decided to put the jaccard vs bray-curtis plots side by side as both are pretty similar, however these graphs gives usuers another visual mode to analyze. The jaccard index Compares if different ecosystem shares similar species (does not care about exact count). it is represented by this equation: |A and B| / |A OR B|.
 This is how it was implemented in python:
-1)Extract names of species from selected snapshots (collision times) and ignore the count
-2)Find all shared and unique species between the snapshots
-3)Calculate jaccard distance (similarity = count(shared_species) / count(all_unique_species))
+- 1)Extract names of species from selected snapshots (collision times) and ignore the count
+- 2)Find all shared and unique species between the snapshots
+- 3)Calculate jaccard distance (similarity = count(shared_species) / count(all_unique_species))
 The bray curtis dissimilarity compares the quantity of similar species in different ecosystems . It is represented by this equation: <img width="147" height="58" alt="Screenshot 2026-04-12 163249" src="https://github.com/user-attachments/assets/7929600d-46d7-400d-82f0-e7ae2e6a1aa3" />
 This is how it was implemented in python:
-1)Get the counts of all species in each of the snapshots
-2)Calculate the difference between each species count 
-3)Divide difference sum by total sum of species (difference_sum / total_population_sum)
+- 1)Get the counts of all species in each of the snapshots
+- 2)Calculate the difference between each species count 
+- 3)Divide difference sum by total sum of species (difference_sum / total_population_sum)
+
+ 4) Abstract Syntax tree: The abstract syntax tree allows users to understand how expressions in the soup evolved to its final collision state.
+This is how it was implemented in python:
+- 1)Break down expression into tokens ( separates characters and symbols)
+- 2)Define 3 different node blueprints (Variable, lambda, application) 
+- 3)Recursively move through tokens to rebuild expression according to node blueprints 
+        - If it sees a \ it is building a lambda
+        - If it sees a ( it recursively parses again
+        - If it is just the letter it builds a variable node
+- 4)Connect all nodes sitting together using application blueprint-> it connects two tokens next to eachother and then connects those formed tokens until the expression is complete
+- 5) In order for this tree to be drawn, the AST is traversed and drawn
+
+5) Molecular Sequence Alignment: 
 
 
-
-5) dsfdsfds
 
 
 

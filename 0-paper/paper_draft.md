@@ -118,10 +118,19 @@ Here is how it is implemented:
 
 
 
-
 ##### Experimental Tools
 
+1)Simulate extinction: This tool allows for users to simulate an extinction even by taking an expression and removing it from the soup. The user can pick between the most popular expressions however the most popular expression of all time is highlighted to allow users to replicate a high stakes extinciton event
+Implementation Steps:
+- 1)Create a new empty dictionary for survivors 
+- 2)For each expression present in the final state of the experiment, if it matches the selected target expression, get rid of it else add that expression and its count to the dictionary
+- 3)Reconstruct the soup and configure a new simulation, the dictionary has the expression and its count so multiply the expression by that count so that it appears in the soup that many times and is ready for more collisions
 
+2) Simulate Invasive Species: This tool allows for users to add an certain number of copies of an invasive species expression to the soup to replicate how disruptive lambda expressions can affect the envrionment over time and if the environment will be able to still reach equilibrium after a disruption in its environment. the default expression is the identity function /x.x hwoever, users are free to type in any expression they see fit and adjust the number of copies.
+Implementation steps:
+- 1)Create a new empty soup of expressions and re-add already present molecules
+- 2)Add the selected invasive molecule at the specified amount of times to the soup
+- 3)Set up a new simulation using this soup and execute the specified amount of collisions
 
 
 

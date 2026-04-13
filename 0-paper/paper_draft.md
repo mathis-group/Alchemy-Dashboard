@@ -141,10 +141,37 @@ Implementation steps:
 #### Characterizing AlChemy Simulations 
 - Similarity between simulations (Jaccard vs Bray–Curtis)
 - Similarity within simulations (Edit distance for lambda expressions)
-- Similarty of expressions between different simulations (Multi-dendrogram edit distance for lambda expressions) 
+- Similarty of expressions between different simulations (Multi-dendrogram edit distance for lambda expressions)
+- Similarity of experiments that use different seeds
+- Similarity of expressions in recursive experiments
+- Similarity of expressions before and after an extinction event (removing the most populated expression from an experiment)
+- Similarity of expressions before and after the introduction of an invasive species (adding copies of the identity funciton /x.x 50,100, and 1000 times to comapre the effective in each number of copies)
 
 #### Initial Conditions, recursive steps, non-recursive controls
-
+- All original experiments are ran with:
+1) Seed 42
+2) 1000 Collisions
+3) polling 10
+4) Fontana Generator
+5) Abs rang 0.1- 0.5
+6) app range 0.2 - 0.6
+7) min depth 1
+8) max depth 5
+9) max free vars 2
+10) free var prob 0.5
+11) intial count 10
+- To ensure that a comparison group (outgroup) was involved in the experiments an experiment was ran on church numerial expressions. The purpose behind choosing this outgroup is that church numerals represent the nautral numbers and grow linearaly compared to the expressions that collide in the generator. This ensures that the basic iterating nature of a church numeral expression acts as a checkpoint against the more complex evolving lambda expressions.
+- I used 10 church numerials to match that there are 10 expressions originally placed in the soup, i used seed 7 and all other settings aligned with the original experiments:
+0) \f.\x.x
+1) \f.\x.f x
+2) \f.\x.f(f x)
+3) \f.\x.f(f(f x))
+4) \f.\x.f(f(f(f x)))
+5) \f.\x.f(f(f(f(f x))))
+6) \f.\x.f(f(f(f(f(f x)))))
+7) \f.\x.f(f(f(f(f(f(f x))))))
+8) \f.\x.f(f(f(f(f(f(f(f x)))))))
+9) \f.\x.f(f(f(f(f(f(f(f(f x))))))))
 
 ## Results
 

@@ -351,28 +351,24 @@
         <div id="content-experiments" style="display: none;">
             <!-- Extinction Event Card -->
             <div class="card border-danger mb-4">
-                <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
+                <div class="card-header bg-danger text-white">
                     <h5 class="mb-0"><i></i> Targeted Extinction</h5>
-                    <span class="badge bg-white text-danger" id="extinction-count-badge">Top Expressions</span>
                 </div>
                 <div class="card-body bg-light">
-                    <p class="small text-muted mb-3">
-                        Manually select a molecule to remove from the population. This will trigger a selective extinction event and fork the experiment into a new timeline.
-                    </p>
+                    <p class="small text-muted">Select a specific molecule to wipe out. This will fork the experiment into a new timeline without this species.</p>
 
                     <div class="form-group mb-3">
-                        <label class="form-label fw-bold small">Select Target Molecule</label>
-                        <select id="extinction-target-dropdown" class="form-control font-monospace" style="font-size: 0.85rem;">
-                            <option value="">-- Loading Population Data... --</option>
+                        <label class="form-label small fw-bold">Select Target (Top 20 by Population)</label>
+                        <select id="extinction-target-dropdown" class="form-control font-monospace" style="font-size: 0.8rem;">
+                            <option value="">-- Loading Population... --</option>
                         </select>
                     </div>
 
-                    <button class="btn btn-danger w-100 fw-bold" id="extinction-tab-btn" onclick="triggerExtinctionFromTab()" disabled>
-                        <i></i> Execute Targeted Extinction
+                    <button class="btn btn-outline-danger w-100 fw-bold" id="extinction-tab-btn" onclick="triggerExtinctionFromTab()" disabled>
+                        Execute Targeted Extinction
                     </button>
                 </div>
             </div>
-
             <!-- Invasive Species Card -->
             <div class="card border-warning mb-4">
                 <div class="card-header bg-warning text-dark">
@@ -443,55 +439,48 @@ function switchDatabaseTab(tabName) {
     function populateExtinctionDropdown(configId) {
         const dropdown = document.getElementById('extinction-target-dropdown');
         const btn = document.getElementById('extinction-tab-btn');
-
         if (!dropdown || !configId) return;
 
-        // fetch the metadata or state which contains the expressions
         fetch(`/get_experiment_metadata/${configId}`)
             .then(res => res.json())
             .then(data => {
-                dropdown.innerHTML = '<option value="" selected disabled>-- Choose a molecule to extinguish --</option>';
-
                 if (data.status === "success" && data.expressions) {
-            
-                    const uniqueExprs = [...new Set(data.expressions)].slice(0, 20);
+                    // Tlly frequencies
+                    const counts = {};
+                    data.expressions.forEach(expr => {
+                        counts[expr] = (counts[expr] || 0) + 1;
+                    });
 
-                    uniqueExprs.forEach(expr => {
+                    //  Sort by population size 
+                    const sorted = Object.entries(counts)
+                        .sort((a, b) => b[1] - a[1])
+                        .slice(0, 20); // Get top 20
+
+                    // Populate Dropdown
+                    dropdown.innerHTML = '<option value="" disabled selected>-- Select a molecule --</option>';
+                    sorted.forEach(([expr, count]) => {
                         const opt = document.createElement('option');
                         opt.value = expr;
-              
-                        opt.textContent = expr.length > 65 ? expr.substring(0, 62) + "..." : expr;
+                      
+                        const displayExpr = expr.length > 50 ? expr.substring(0, 47) + "..." : expr;
+                        opt.textContent = `[Pop: ${count}] ${displayExpr}`;
                         dropdown.appendChild(opt);
                     });
 
-                    dropdown.addEventListener('change', () => {
-                        btn.disabled = !dropdown.value;
-                    });
-                } else {
-                    dropdown.innerHTML = '<option value="">No expressions found</option>';
+                    dropdown.onchange = () => { btn.disabled = !dropdown.value; };
                 }
-            })
-            .catch(err => {
-                console.error("Error populating extinction list:", err);
-                dropdown.innerHTML = '<option value="">Error loading data</option>';
             });
     }
 
     // Updated execution function
     function triggerExtinctionFromTab() {
-        const targetExpr = document.getElementById('extinction-target-dropdown').value;
+        const target = document.getElementById('extinction-target-dropdown').value;
+        if (!target) return;
 
-        if (!targetExpr) {
-            alert("Please select a target expression first.");
-            return;
-        }
-
-        if (!confirm(`Are you sure? You are about to wipe "${targetExpr.substring(0, 30)}..." from the population and fork the experiment.`)) {
-            return;
-        }
+        if (!confirm("Confirm targeted extinction? This will fork the simulation.")) return;
 
         const btn = document.getElementById('extinction-tab-btn');
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Initializing Extinction...';
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Culling...';
         btn.disabled = true;
 
         fetch('/trigger_extinction', {
@@ -499,16 +488,16 @@ function switchDatabaseTab(tabName) {
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 config_id: window.currentConfigID,
-                target_expression: targetExpr // Sending the specific target to the backend
+                target_expression: target
             })
         })
-            .then(response => response.json())
+            .then(res => res.json())
             .then(data => {
                 if (data.status === 'success') {
                     window.location.href = `/database?config_id=${data.new_config_id}`;
                 } else {
-                    alert("Extinction failed: " + data.message);
-                    btn.innerHTML = '<i class="fas fa-bolt me-2"></i> Execute Targeted Extinction';
+                    alert("Error: " + data.message);
+                    btn.innerHTML = 'Execute Targeted Extinction';
                     btn.disabled = false;
                 }
             });

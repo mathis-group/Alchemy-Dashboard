@@ -97,7 +97,27 @@ This is how it was implemented in python:
 - 4)Connect all nodes sitting together using application blueprint-> it connects two tokens next to eachother and then connects those formed tokens until the expression is complete
 - 5) In order for this tree to be drawn, the AST is traversed and drawn
 
-5) Molecular Sequence Alignment:
+5) Molecular Sequence Alignment: Inspired by the BLAST gene sequence alignment tool creted by NCBI, we decided to replicate a similar tool that can be used to further analyze the final state of expression s in an experiment on a mathematical level. This tool utilizes the levenstein distance library to caluclate the edit distance and identity% of a selected expression to other expressions in the soup.
+Here is how it is implemented:
+- 1)Obtain users input of expression selected
+- 2)Obtain the top 100 most populated unique molecules in the experiment
+- 3)For each molecule in top 100 selected calculate levenstein distance and find the max length between the two compared expressions
+- 4)Calculate identity (1 - (Levenstein Distance / MaxLength)) * 100
+- 5)Sort all compared molecules by highest identity percentage and return top 10 matches
+
+6) Multi Experiment Dendrogram Comparison:Inspired by phylogenetic trees, we created a dendrogram in a subsection of the dashboard to allow users to compare the evolution of expressions across various experiments. This allows for users to visualize how small changes across experiments can affect the popularity and form of expressions.
+Here is how it is implemented:
+- 1)Create empty dictionary to track expressions
+- 2)For each experiment: grab top expressions (number of expressions determined by user)
+- 3)Assign a unique color to the experiment
+- 4)For each expression: add to dictionary if not yet tracked, record experiment associated with expression 
+- 5)Create a list of every unique expression found across all selected experiments
+- 6)Calculate Levenstein distance between every possible pair of expressions
+- 7)Use the linkage algorithm to build the dendrogram tree (linkage(squareform(dist_matrix), method='average'))
+- 8)Draw the graph and color code the expressions based on its experiment ID (if it is attached to more than one experiment then color it black)
+
+
+
 
 ##### Experimental Tools
 

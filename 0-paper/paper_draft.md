@@ -173,6 +173,29 @@ Implementation steps:
 8) \f.\x.f(f(f(f(f(f(f(f x)))))))
 9) \f.\x.f(f(f(f(f(f(f(f(f x))))))))
 
+1) Experiment 1: Comparing Different Seeds 
+- Step 1: Generate 4 different Fontana experiments with 1000 collisions and seeds 42, 280, and 3017 respectively with default values and initial count 10.
+- Step 2: Generate an outgroup using Church numerals and random seed 7
+- Step 3: Compare using multi experiment Dendrogram
+  
+2) Experiment 2: Recursive Experiment
+- Step 1: Generate a fontana simulation with 1000 collisions, seed 42, and 10 initial expressions the rest is default settings
+- Step 2: Use my base simulation to create 3 recursions (generations) of that experiment
+- Step 3: Generate an outgroup using Church numerials and random seed 7
+- Step 4: Compare metrics utilizing dashboard tools
+  
+3) Experiment 3: Extinction (Most Popular Expression)
+- Step 1: Generate a fontana simulation with 1000 collisions, seed 42, and 10 initial expressions the rest is default settings
+- Step 2: utilizing the extinciton function b utton, delete the most populated expression from the simulation
+
+4) Experiment 4: Invasive Species 
+- Step 1: Generate a fontana simulation with 1000 collisions, seed 42, and 10 initial expressions the rest is default settings
+- Step 2: Add 50 copies of the identity function /x.x and note changes
+- Step 3: Add 100 copies of the same identity expression, note changes
+- Step 4: Ad 1000 copies of the same identity expression, note changes
+- Step 5: Final multi experiment dendrogram comparison across each checkpoint of adding more copies of the identity expression
+
+
 ## Results
 
 ## Discussion

@@ -351,13 +351,24 @@
         <div id="content-experiments" style="display: none;">
             <!-- Extinction Event Card -->
             <div class="card border-danger mb-4">
-                <div class="card-header bg-danger text-white">
-                    <h5 class="mb-0"><i></i>Simulate Extinction Event</h5>
+                <div class="card-header bg-danger text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i></i> Targeted Extinction</h5>
+                    <span class="badge bg-white text-danger" id="extinction-count-badge">Top Expressions</span>
                 </div>
                 <div class="card-body bg-light">
-                    <p class="mb-3">Trigger an <strong>Extinction Event</strong>. This will instantly kill the most populated expression at the end of this experiment and start a new simulation excluding them.</p>
-                    <button class="btn btn-outline-danger w-100" id="extinction-tab-btn" onclick="triggerExtinctionFromTab()">
-                        <i></i> Trigger Extinction
+                    <p class="small text-muted mb-3">
+                        Manually select a molecule to remove from the population. This will trigger a selective extinction event and fork the experiment into a new timeline.
+                    </p>
+
+                    <div class="form-group mb-3">
+                        <label class="form-label fw-bold small">Select Target Molecule</label>
+                        <select id="extinction-target-dropdown" class="form-control font-monospace" style="font-size: 0.85rem;">
+                            <option value="">-- Loading Population Data... --</option>
+                        </select>
+                    </div>
+
+                    <button class="btn btn-danger w-100 fw-bold" id="extinction-tab-btn" onclick="triggerExtinctionFromTab()" disabled>
+                        <i></i> Execute Targeted Extinction
                     </button>
                 </div>
             </div>
@@ -428,36 +439,80 @@ function switchDatabaseTab(tabName) {
     document.getElementById('content-' + tabName).style.display = "block";
 }
 
-// Extinction function for tab button
-function triggerExtinctionFromTab() {
-    if (!confirm("Are you sure you want to trigger an extinction event?")) return;
+    // Function to fetch the top molecules and fill the dropdown
+    function populateExtinctionDropdown(configId) {
+        const dropdown = document.getElementById('extinction-target-dropdown');
+        const btn = document.getElementById('extinction-tab-btn');
 
-    const btn = document.getElementById('extinction-tab-btn');
-    btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Calculating...';
-    btn.disabled = true;
+        if (!dropdown || !configId) return;
 
-    fetch('/trigger_extinction', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ config_id: window.currentConfigID })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.status === 'success') {
-            alert(data.message);
-            window.location.href = `/database?config_id=${data.new_config_id}`;
-        } else {
-            alert("Extinction failed: " + data.message);
-            btn.innerHTML = '<i class="fas fa-bolt me-2"></i> Trigger Extinction';
-            btn.disabled = false;
+        // fetch the metadata or state which contains the expressions
+        fetch(`/get_experiment_metadata/${configId}`)
+            .then(res => res.json())
+            .then(data => {
+                dropdown.innerHTML = '<option value="" selected disabled>-- Choose a molecule to extinguish --</option>';
+
+                if (data.status === "success" && data.expressions) {
+            
+                    const uniqueExprs = [...new Set(data.expressions)].slice(0, 20);
+
+                    uniqueExprs.forEach(expr => {
+                        const opt = document.createElement('option');
+                        opt.value = expr;
+              
+                        opt.textContent = expr.length > 65 ? expr.substring(0, 62) + "..." : expr;
+                        dropdown.appendChild(opt);
+                    });
+
+                    dropdown.addEventListener('change', () => {
+                        btn.disabled = !dropdown.value;
+                    });
+                } else {
+                    dropdown.innerHTML = '<option value="">No expressions found</option>';
+                }
+            })
+            .catch(err => {
+                console.error("Error populating extinction list:", err);
+                dropdown.innerHTML = '<option value="">Error loading data</option>';
+            });
+    }
+
+    // Updated execution function
+    function triggerExtinctionFromTab() {
+        const targetExpr = document.getElementById('extinction-target-dropdown').value;
+
+        if (!targetExpr) {
+            alert("Please select a target expression first.");
+            return;
         }
-    })
-    .catch(error => {
-        alert("Server error occurred.");
-        btn.innerHTML = '<i class="fas fa-bolt me-2"></i> Trigger Extinction';
-        btn.disabled = false;
-    });
-}
+
+        if (!confirm(`Are you sure? You are about to wipe "${targetExpr.substring(0, 30)}..." from the population and fork the experiment.`)) {
+            return;
+        }
+
+        const btn = document.getElementById('extinction-tab-btn');
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin me-2"></i> Initializing Extinction...';
+        btn.disabled = true;
+
+        fetch('/trigger_extinction', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                config_id: window.currentConfigID,
+                target_expression: targetExpr // Sending the specific target to the backend
+            })
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    window.location.href = `/database?config_id=${data.new_config_id}`;
+                } else {
+                    alert("Extinction failed: " + data.message);
+                    btn.innerHTML = '<i class="fas fa-bolt me-2"></i> Execute Targeted Extinction';
+                    btn.disabled = false;
+                }
+            });
+    }
 
 const experimentDropdown = document.getElementById('experiment_dropdown');
 const deleteExperimentButton = document.getElementById('delete-experiment-btn');
@@ -596,7 +651,9 @@ window.addEventListener('resize', updateExpressionFade);
 
 document.addEventListener("DOMContentLoaded", function() {
     updateDownloadLink(window.currentConfigID);
-
+    if (window.currentConfigID) {
+        populateExtinctionDropdown(window.currentConfigID); 
+    }
     if (toggleExpressionsButton) {
         toggleExpressionsButton.addEventListener('click', function() {
             const expanded = toggleExpressionsButton.dataset.expanded === 'true';
@@ -726,7 +783,7 @@ if (experimentDropdown) {
         renderExperimentPlots(experimentId);
         renderDistanceAnalysis(experimentId);
         renderLineageAnalysis(experimentId);
-
+        populateExtinctionDropdown(experimentId);
         fetch(`/get_experiment_metadata/${experimentId}`)
             .then(res => res.json())
             .then(data => {

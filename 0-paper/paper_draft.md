@@ -174,7 +174,7 @@ Implementation steps:
 9) \f.\x.f(f(f(f(f(f(f(f(f x))))))))
 
 1) Experiment 1: Comparing Different Seeds 
-- Step 1: Generate 4 different Fontana experiments with 1000 collisions and seeds 42, 280, and 3017 respectively with default values and initial count 10.
+- Step 1: Generate 3 different Fontana experiments with 1000 collisions and seeds 42, 280, and 3017 respectively with default values and initial count 10.
 - Step 2: Generate an outgroup using Church numerals and random seed 7
 - Step 3: Compare using multi experiment Dendrogram
   
@@ -197,7 +197,10 @@ Implementation steps:
 
 
 ## Results
+1) Experiment 1: Comparing Different Seeds
+<img width="1291" height="692" alt="Screenshot 2026-04-12 215430" src="https://github.com/user-attachments/assets/0cc1b54b-a494-4f12-b681-3c15281a210e" />
 
+2) Experiment 2: Recursive Experiment
 ## Discussion
 
 ### Next steps for AlChemy

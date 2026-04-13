@@ -278,7 +278,7 @@
                                 <thead class="table-light">
                                     <tr>
                                         <th style="width: 8%;">Rank</th>
-                                        <th style="width: 54%;">Matched Expression</th>
+                                        <th style="width: 50%;">Matched Expression</th>
                                         <th style="width: 16%;" class="text-center">% Identity</th>
                                         <th style="width: 22%;" class="text-center">Edit Distance</th>
                                     </tr>
@@ -1135,43 +1135,49 @@ function runBlastSearch() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ expression: targetExpr })
     })
-        .then(response => response.json())
-        .then(data => {
-            btn.innerHTML = originalText;
-            btn.disabled = false;
+    .then(response => response.json())
+    .then(data => {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
 
-            if (data.status === 'success') {
-                const tbody = document.getElementById('blast-results-body');
-                tbody.innerHTML = '';
+        if (data.status === 'success') {
+            const tbody = document.getElementById('blast-results-body');
+            tbody.innerHTML = '';
 
-                if (data.results.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-4">No similar molecules found.</td></tr>';
-                } else {
-                    data.results.forEach((match, index) => {
-                        let badgeClass = "bg-danger";
-                        if (match.identity >= 80) badgeClass = "bg-success";
-                        else if (match.identity >= 50) badgeClass = "bg-warning text-dark";
+            if (data.results.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-4">No similar molecules found.</td></tr>';
+            } else {
+                data.results.forEach((match, index) => {
+                    let badgeClass = match.identity >= 80 ? "bg-success" : (match.identity >= 50 ? "bg-warning text-dark" : "bg-danger");
 
-                        const displayExpr = match.expression.length > 45
-                            ? match.expression.substring(0, 42) + '...'
-                            : match.expression;
+                    // Expandable logic:
+                    let expressionHTML = "";
+                    if (match.expression.length > 45) {
+                        expressionHTML = `
+                            <span class="short-expr">${match.expression.substring(0, 42)}...</span>
+                            <span class="full-expr" style="display:none; word-break: break-all;">${match.expression}</span>
+                            <a href="javascript:void(0)" class="ms-1 small text-primary text-decoration-none fw-bold" onclick="toggleExpression(this)">[more]</a>
+                        `;
+                    } else {
+                        expressionHTML = match.expression;
+                    }
 
-                        const row = `
+                    const row = `
                         <tr>
                             <td style="width: 8%; vertical-align: middle; padding-left: 1rem !important;">
                                 <span class="fw-bold text-secondary">#${index + 1}</span>
                             </td>
-                            <td style="width: 54%; vertical-align: middle;">
-                                <code class="text-dark" style="background: transparent; font-size: 0.85rem; word-break: break-word;" title="${match.expression}">
-                                    ${displayExpr}
+                            <td style="width: 50%; vertical-align: middle;">
+                                <code class="text-dark" style="background: transparent; font-size: 0.85rem;">
+                                    ${expressionHTML}
                                 </code>
                             </td>
-                            <td style="width: 16%; vertical-align: middle; text-align: center;">
+                            <td style="width: 15%; vertical-align: middle; text-align: center;">
                                 <span class="badge ${badgeClass}" style="font-size: 0.85rem; padding: 0.5rem 1rem; min-width: 70px; display: inline-block;">
                                     ${match.identity}%
                                 </span>
                             </td>
-                            <td style="width: 22%; vertical-align: middle; text-align: center;">
+                            <td style="width: 27%; vertical-align: middle; text-align: center;" class="ps-5">
                                 <span style="display: inline-block;">
                                     <span class="fw-bold" style="font-size: 1rem;">${match.distance}</span>
                                     <span class="text-muted" style="font-size: 0.75rem; margin-left: 10px;">typos</span>
@@ -1179,33 +1185,40 @@ function runBlastSearch() {
                             </td>
                         </tr>
                     `;
-                        tbody.innerHTML += row;
-                    });
-                }
-
-                document.getElementById('blast-results-container').style.display = 'block';
-
-                setTimeout(() => {
-                    document.getElementById('blast-results-container').scrollIntoView({
-                        behavior: 'smooth',
-                        block: 'nearest'
-                    });
-                }, 100);
-            } else {
-                alert("Error: " + data.message);
+                    tbody.innerHTML += row;
+                });
             }
-        })
-        .catch(error => {
-            btn.innerHTML = originalText;
-            btn.disabled = false;
-            alert("Failed to run alignment. Please try again.");
-            console.error("Error:", error);
-        });
+            document.getElementById('blast-results-container').style.display = 'block';
+        } else {
+            alert("Error: " + data.message);
+        }
+    })
+    .catch(error => {
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+        console.error("Error:", error);
+    });
 }
-
 const blastBtn = document.getElementById('run-blast-btn');
 if (blastBtn) {
     blastBtn.addEventListener('click', runBlastSearch);
+    }
+
+function toggleExpression(btn) {
+    const container = btn.closest('td');
+    const short = container.querySelector('.short-expr');
+    const full = container.querySelector('.full-expr');
+    
+    if (full.style.display === 'none') {
+        full.style.display = 'inline';
+        short.style.display = 'none';
+        btn.textContent = '[less]';
+    } else {
+        full.style.display = 'none';
+        short.style.display = 'inline';
+        btn.textContent = '[more]';
+    }
 }
+
 </script>
 {% endblock %}

@@ -122,9 +122,12 @@ Here is how it is implemented:
 
 1)Simulate extinction: This tool allows for users to simulate an extinction even by taking an expression and removing it from the soup. The user can pick between the most popular expressions however the most popular expression of all time is highlighted to allow users to replicate a high stakes extinciton event
 Implementation Steps:
-- 1)Create a new empty dictionary for survivors 
-- 2)For each expression present in the final state of the simulation, if it matches the selected target expression, get rid of it else add that expression and its count to the dictionary
-- 3)Reconstruct the soup and configure a new simulation, the dictionary has the expression and its count so multiply the expression by that count so that it appears in the soup that many times and is ready for more collisions
+- 1) retrieve final state of parent experiment and the target expression selected by the user
+- 2)Calculate total number of expressions in the soup
+- 3)Tterate through the entire list of molecules and creates a new survivor list without copies of the target expression
+- 4) Create a scale (Number of expressions in original state/number of survivors) and multiple every survivor by that scale to ensure that the soup has the same number of expressions as it did before the extinction event
+- 5) increment random seed
+  6) run collisions
 
 2) Simulate Invasive Species: This tool allows for users to add an certain number of copies of an invasive species expression to the soup to replicate how disruptive lambda expressions can affect the envrionment over time and if the environment will be able to still reach equilibrium after a disruption in its environment. the default expression is the identity function /x.x hwoever, users are free to type in any expression they see fit and adjust the number of copies.
 Implementation steps:
@@ -220,8 +223,20 @@ Implementation steps:
    <img width="1433" height="820" alt="Screenshot 2026-04-13 211506" src="https://github.com/user-attachments/assets/f36e041c-9e08-4097-9b97-67747221e3ac" />
    - Observations:
    - There are a good ammount of shared nodes (about 30)
-   - One thing that I found interesting was there there was a shared expression between the parent generation and generation 4, that generation must of disappeared in the other generations or lost popularity then reappared again in the last generation
+   - A lot of these shared expressions are within the same similarity cluster of the dendrogram
+   - One thing that I found interesting was there there was a shared expression between the parent generation and generation 4, that generation must of disappeared in the other generations or lost popularity then reappared again in the last generation. 
      <img width="453" height="270" alt="Screenshot 2026-04-13 211724" src="https://github.com/user-attachments/assets/d7c5c2f6-e358-4d06-b46e-c1e37f91cb5c" />
+
+3) Experiment 3: Extinction Experiment
+
+- Entropy plots:
+- Before extinction:
+  
+- After Extinction:
+
+- 
+
+
 
 
 

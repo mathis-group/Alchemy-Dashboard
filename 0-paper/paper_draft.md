@@ -230,6 +230,8 @@ Implementation steps:
 
 3) Experiment 3: Extinction Experiment
 - Longest most popular expression:
+- <img width="1070" height="513" alt="Screenshot 2026-04-13 220445" src="https://github.com/user-attachments/assets/bcfd0f26-4522-48b7-8c17-f75091f83bc4" />
+
     - Entropy plots:
         - Before extinction:
   
@@ -245,7 +247,7 @@ Implementation steps:
      
     - Multi-dendrogram comparison:
       
-- Shortest most popular expression:
+- Shortest most popular expression: \a.a
     - Entropy plots:
         - Before extinction:
   

@@ -189,7 +189,8 @@ Implementation steps:
   
 3) Experiment 3: Extinction (Most Popular Expression)
 - Step 1: Generate a fontana simulation with 1000 collisions, seed 42, and 10 initial expressions the rest is default settings
-- Step 2: utilizing the extinciton function b utton, delete the most populated expression from the simulation
+- Step 2: utilizing the extinciton function button, delete the longest most popular expression from the soup
+- Step 3: Still using the original parent function as a baseline, now delete the shortest most popular expression from the soup
 
 4) Experiment 4: Invasive Species 
 - Step 1: Generate a fontana simulation with 1000 collisions, seed 42, and 10 initial expressions the rest is default settings
@@ -228,8 +229,8 @@ Implementation steps:
      <img width="453" height="270" alt="Screenshot 2026-04-13 211724" src="https://github.com/user-attachments/assets/d7c5c2f6-e358-4d06-b46e-c1e37f91cb5c" />
 
 3) Experiment 3: Extinction Experiment
-
-- Entropy plots:
+- Longest most popular expression:
+    - Entropy plots:
 - Before extinction:
   
 - After Extinction:

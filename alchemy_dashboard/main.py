@@ -566,62 +566,43 @@ def trigger_extinction():
     try:
         data = request.get_json()
         parent_config_id = data.get('config_id')
-        #The specific expression string selected by the user 
         target_expr = data.get('target_expression')
 
         if not parent_config_id or not target_expr:
             return jsonify({'status': 'error', 'message': 'Missing config_id or target_expression'}), 400
 
-        # Fetch Parent 
         parent_data = get_experiment_details(parent_config_id)
         if not parent_data or not parent_data[0]:
             return jsonify({'status': 'error', 'message': 'Parent data not found.'}), 404
         
         parent_config = parent_data[0]
         
-        # Get the Final State 
         final_state = get_expressions_for_collision(parent_config_id, -1)
         if not final_state:
             return jsonify({'status': 'error', 'message': 'Final population state not found.'}), 404
 
-        #  Filter out the target
-        
-        original_total_n = sum(count for _, count in final_state)
         survivors = [item for item in final_state if item[0].strip() != target_expr.strip()]
 
         if not survivors:
-            return jsonify({'status': 'error', 'message': 'Extinction killed everything! No survivors to refill.'}), 400
+            return jsonify({'status': 'error', 'message': 'Extinction killed everything! No survivors.'}), 400
 
-        #  Fill the void to maintain density
-        survivor_count_pre_refill = sum(count for _, count in survivors)
-        scale_factor = original_total_n / survivor_count_pre_refill
-        
-        refilled_pool = []
+        survivor_pool = []
         for expr, count in survivors:
-            # Scale each survivor up proportionally
-            scaled_count = int(round(count * scale_factor))
-            refilled_pool.extend([expr] * scaled_count)
+            survivor_pool.extend([expr] * count)
 
-       
-        new_seed = (parent_config[1] or 42) + 1
+        new_seed = parent_config[1] or 42
         
         config = {
             'generator_type': 'from_file', 
-            'expressions': refilled_pool,
+            'expressions': survivor_pool,
             'total_collisions': parent_config[3], 
             'polling_frequency': parent_config[4], 
             'random_seed': new_seed,
             'experiment_name': f"Post-Extinction: {target_expr[:15]}... (From: {parent_config_id})",
-            'continuation': {
-                'parent_config_id': parent_config_id,
-                'fraction': 1.0 
-            }
         }
 
-        # 6. RUN EXPERIMENT
         result = run_experiment(config)
         
-        # 7. PERSIST TO DB
         new_id = save_configuration(
             random_seed=config['random_seed'], 
             generator_type='from_file', 
@@ -634,11 +615,9 @@ def trigger_extinction():
             name=config['experiment_name']
         )
 
-        # Record Initial State (t=0)
-        for expr, count in Counter(refilled_pool).items():
+        for expr, count in Counter(survivor_pool).items():
             save_experiment_state(new_id, 0, expr, count)
 
-        # Record metrics and population over time
         metrics = result.get('metrics', [])
         for metric in metrics:
             save_averages(new_id, metric['collision_number'], metric['entropy'], metric['unique_expressions'])
@@ -646,18 +625,18 @@ def trigger_extinction():
                 for expr, count in Counter(metric['expressions']).items():
                     save_experiment_state(new_id, metric['collision_number'], expr, count)
 
-        # Link Lineage with the total particle count used for refilling
-        save_continuation_metadata(new_id, parent_config_id, 1.0, len(refilled_pool), 0)
+        save_continuation_metadata(new_id, parent_config_id, 1.0, len(survivor_pool), 0)
 
         return jsonify({
             'status': 'success', 
             'new_config_id': new_id,
-            'message': f"Successfully purged target and refilled soup to {len(refilled_pool)} particles."
+            'message': f"Successfully purged target. Soup continues with {len(survivor_pool)} surviving particles."
         })
 
     except Exception as e:
         print(f"CRITICAL ERROR IN EXTINCTION: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
+
 
 #route for comparison dendrograms 
 @app.route('/multi_compare')

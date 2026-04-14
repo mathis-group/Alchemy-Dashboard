@@ -352,16 +352,19 @@
             <!-- Extinction Event Card -->
             <div class="card border-danger mb-4">
                 <div class="card-header bg-danger text-white">
-                    <h5 class="mb-0"><i></i> Targeted Extinction</h5>
+                    <h5 class="mb-0">Targeted Extinction</h5>
                 </div>
                 <div class="card-body bg-light">
-                    <p class="small text-muted">Select a specific molecule to wipe out. This will fork the experiment into a new timeline without this species.</p>
+                    <p class="small text-muted">Select a specific molecule to wipe out.</p>
 
                     <div class="form-group mb-3">
                         <label class="form-label small fw-bold">Select Target (Top 20 by Population)</label>
                         <select id="extinction-target-dropdown" class="form-control font-monospace" style="font-size: 0.8rem;">
                             <option value="">-- Loading Population... --</option>
                         </select>
+
+                        <div id="extinction-target-preview" class="mt-2 p-2 border rounded bg-white small font-monospace" style="display:none; word-break: break-all;">
+                        </div>
                     </div>
 
                     <button class="btn btn-outline-danger w-100 fw-bold" id="extinction-tab-btn" onclick="triggerExtinctionFromTab()" disabled>
@@ -435,28 +438,26 @@ function switchDatabaseTab(tabName) {
     document.getElementById('content-' + tabName).style.display = "block";
 }
 
-    // Function to fetch the top molecules and fill the dropdown
     function populateExtinctionDropdown(configId) {
         const dropdown = document.getElementById('extinction-target-dropdown');
         const btn = document.getElementById('extinction-tab-btn');
+        const preview = document.getElementById('extinction-target-preview'); // New
+
         if (!dropdown || !configId) return;
 
         fetch(`/get_experiment_metadata/${configId}`)
             .then(res => res.json())
             .then(data => {
                 if (data.status === "success" && data.expressions) {
-                    // Tlly frequencies
                     const counts = {};
                     data.expressions.forEach(expr => {
                         counts[expr] = (counts[expr] || 0) + 1;
                     });
 
-                    //  Sort by population size 
                     const sorted = Object.entries(counts)
                         .sort((a, b) => b[1] - a[1])
-                        .slice(0, 20); // Get top 20
+                        .slice(0, 20);
 
-                    // Populate Dropdown
                     dropdown.innerHTML = '<option value="" disabled selected>-- Select a molecule --</option>';
                     sorted.forEach(([expr, count]) => {
                         const opt = document.createElement('option');
@@ -467,9 +468,52 @@ function switchDatabaseTab(tabName) {
                         dropdown.appendChild(opt);
                     });
 
-                    dropdown.onchange = () => { btn.disabled = !dropdown.value; };
+                    // Update both the button and the preview box on change
+                    dropdown.onchange = () => {
+                        btn.disabled = !dropdown.value;
+                        updateExtinctionPreview(dropdown.value);
+                    };
                 }
             });
+    }
+
+    // 
+    function updateExtinctionPreview(expr) {
+        const preview = document.getElementById('extinction-target-preview');
+        if (!expr) {
+            preview.style.display = 'none';
+            return;
+        }
+
+        preview.style.display = 'block';
+
+        if (expr.length > 100) {
+            preview.innerHTML = `
+            <strong>Full Sequence:</strong><br>
+            <span class="short-expr">${expr.substring(0, 97)}...</span>
+            <span class="full-expr" style="display:none;">${expr}</span>
+            <a href="javascript:void(0)" class="ms-1 fw-bold text-primary" onclick="togglePreview(this)">[more]</a>
+        `;
+        } else {
+            preview.innerHTML = `<strong>Full Sequence:</strong><br><code>${expr}</code>`;
+        }
+    }
+
+    // Separate toggle function for  preview 
+    function togglePreview(btn) {
+        const container = btn.parentElement;
+        const short = container.querySelector('.short-expr');
+        const full = container.querySelector('.full-expr');
+
+        if (full.style.display === 'none') {
+            full.style.display = 'inline';
+            short.style.display = 'none';
+            btn.textContent = '[less]';
+        } else {
+            full.style.display = 'none';
+            short.style.display = 'inline';
+            btn.textContent = '[more]';
+        }
     }
 
     // Updated execution function

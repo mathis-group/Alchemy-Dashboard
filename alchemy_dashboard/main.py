@@ -564,82 +564,99 @@ def sequence_alignment(config_id):
 @app.route('/trigger_extinction', methods=['POST'])
 def trigger_extinction():
     try:
-        
         data = request.get_json()
         parent_config_id = data.get('config_id')
-        
-        if not parent_config_id:
-            return jsonify({'status': 'error', 'message': 'Missing config_id'}), 400
+        #The specific expression string selected by the user 
+        target_expr = data.get('target_expression')
 
-        # fetch the final state
+        if not parent_config_id or not target_expr:
+            return jsonify({'status': 'error', 'message': 'Missing config_id or target_expression'}), 400
+
+        # Fetch Parent 
+        parent_data = get_experiment_details(parent_config_id)
+        if not parent_data or not parent_data[0]:
+            return jsonify({'status': 'error', 'message': 'Parent data not found.'}), 404
+        
+        parent_config = parent_data[0]
+        
+        # Get the Final State 
         final_state = get_expressions_for_collision(parent_config_id, -1)
         if not final_state:
-            return jsonify({'status': 'error', 'message': 'No final data found.'}), 404
+            return jsonify({'status': 'error', 'message': 'Final population state not found.'}), 404
 
-        # sort population count from highest to lowest
-        sorted_population = sorted(final_state, key=lambda x: x[1], reverse=True)
+        #  Filter out the target
         
-        # remove the molecule with the highest count
-        apex_predator = sorted_population[0][0]
-        apex_count = sorted_population[0][1]
-        survivors = sorted_population[1:] 
+        original_total_n = sum(count for _, count in final_state)
+        survivors = [item for item in final_state if item[0].strip() != target_expr.strip()]
 
-        # reconstruct survivor list for rust
-        survivor_expressions = []
+        if not survivors:
+            return jsonify({'status': 'error', 'message': 'Extinction killed everything! No survivors to refill.'}), 400
+
+        #  Fill the void to maintain density
+        survivor_count_pre_refill = sum(count for _, count in survivors)
+        scale_factor = original_total_n / survivor_count_pre_refill
+        
+        refilled_pool = []
         for expr, count in survivors:
-            survivor_expressions.extend([expr] * count) 
+            # Scale each survivor up proportionally
+            scaled_count = int(round(count * scale_factor))
+            refilled_pool.extend([expr] * scaled_count)
 
-        if not survivor_expressions:
-            return jsonify({'status': 'error', 'message': 'No surivors left!'}), 400
-
-        # send to rust 
+       
+        new_seed = (parent_config[1] or 42) + 1
+        
         config = {
             'generator_type': 'from_file', 
-            'expressions': survivor_expressions,
-            'total_collisions': 1000, 
-            'polling_frequency': 10,
-            'random_seed': 42,
-            'experiment_name': f"Post-Extinction (Parent: {parent_config_id})",
+            'expressions': refilled_pool,
+            'total_collisions': parent_config[3], 
+            'polling_frequency': parent_config[4], 
+            'random_seed': new_seed,
+            'experiment_name': f"Post-Extinction: {target_expr[:15]}... (From: {parent_config_id})",
             'continuation': {
                 'parent_config_id': parent_config_id,
                 'fraction': 1.0 
             }
         }
 
-        # run experiment with survivors
+        # 6. RUN EXPERIMENT
         result = run_experiment(config)
         
-        # save new configuration 
-        new_config_id = save_configuration(
+        # 7. PERSIST TO DB
+        new_id = save_configuration(
             random_seed=config['random_seed'], 
             generator_type='from_file', 
             total_collisions=config['total_collisions'],
             polling_frequency=config['polling_frequency'], 
-            probability_range=json.dumps({'input_mode': 'extinction_event', 'culled_species': apex_predator}),
+            probability_range=json.dumps({
+                'event': 'targeted_extinction', 
+                'removed': target_expr[:50] + "..." if len(target_expr) > 50 else target_expr
+            }),
             name=config['experiment_name']
         )
 
-        # save initial state, metrics and record timeline
-        for expr, count in Counter(survivor_expressions).items():
-            save_experiment_state(new_config_id, 0, expr, count)
+        # Record Initial State (t=0)
+        for expr, count in Counter(refilled_pool).items():
+            save_experiment_state(new_id, 0, expr, count)
 
+        # Record metrics and population over time
         metrics = result.get('metrics', [])
         for metric in metrics:
-            save_averages(new_config_id, metric['collision_number'], metric['entropy'], metric['unique_expressions'])
+            save_averages(new_id, metric['collision_number'], metric['entropy'], metric['unique_expressions'])
             if 'expressions' in metric:
                 for expr, count in Counter(metric['expressions']).items():
-                    save_experiment_state(new_config_id, metric['collision_number'], expr, count)
+                    save_experiment_state(new_id, metric['collision_number'], expr, count)
 
-        save_continuation_metadata(new_config_id, parent_config_id, 1.0, len(survivors), 0)
+        # Link Lineage with the total particle count used for refilling
+        save_continuation_metadata(new_id, parent_config_id, 1.0, len(refilled_pool), 0)
 
         return jsonify({
             'status': 'success', 
-            'new_config_id': new_config_id,
-            'message': f"The most abundant expression '{apex_predator[:15]}...' ({apex_count} copies) was eradicated. A new timeline has started"
+            'new_config_id': new_id,
+            'message': f"Successfully purged target and refilled soup to {len(refilled_pool)} particles."
         })
 
     except Exception as e:
-        print(f"Extinction Error: {e}")
+        print(f"CRITICAL ERROR IN EXTINCTION: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 #route for comparison dendrograms 
@@ -699,19 +716,20 @@ def run_simulation_form():
         current_pool = None
         last_config_id = int(recursive_parent_id) if recursive_parent_id else None
 
-        # --- PRE-FLIGHT: If starting from an existing parent, fetch its survivors ONCE ---
+        # If starting from an existing parent, fetch its survivors once
         if last_config_id:
             from .db_utils import get_experiment_details, get_expressions_for_collision
             parent_config, _, _ = get_experiment_details(last_config_id)
-            random_seed = parent_config[1] # LOCK SEED
-            
+            random_seed = parent_config[1]
+    
             final_state = get_expressions_for_collision(last_config_id, -1)
             if not final_state:
                 return jsonify({'status': 'error', 'message': f"Parent ID {last_config_id} has no collision data to inherit."}), 400
-                
+
             current_pool = []
             for expr, count in sorted(final_state, key=lambda x: x[1], reverse=True)[:15]:
                 current_pool.extend([expr] * count)
+
             generator_type = 'from_file'
 
         # --- MULTI-GENERATION LOOP ---
@@ -773,8 +791,11 @@ def run_simulation_form():
 
             # Save DB
             new_id = save_configuration(
-                random_seed=random_seed, generator_type=generator_type,
-                total_collisions=total_collisions, polling_frequency=polling_frequency,
+                random_seed=random_seed, 
+                generator_type=generator_type,
+                total_collisions=total_collisions,
+                polling_frequency=polling_frequency,
+                probability_range=json.dumps(config.get('generator_params', {})),
                 name=exp_name
             )
 

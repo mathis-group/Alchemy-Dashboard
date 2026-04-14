@@ -480,7 +480,7 @@ function switchDatabaseTab(tabName) {
         if (!confirm("Confirm targeted extinction? This will fork the simulation.")) return;
 
         const btn = document.getElementById('extinction-tab-btn');
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Culling...';
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
         btn.disabled = true;
 
         fetch('/trigger_extinction', {

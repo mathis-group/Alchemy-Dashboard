@@ -212,18 +212,18 @@ Implementation steps:
 
 
 2) Experiment 2: Recursive Experiment
-   -Exp 4 = OUTGROUP
-   - Exp 5 = Parent Generation (Gen 1)
-   - Exp 6 = Generation 2
-   - Exp 7 = Generation 3
-   - Exp 8 = Generation 4
-<img width="1548" height="834" alt="Screenshot 2026-04-13 203633" src="https://github.com/user-attachments/assets/4073d28c-d387-4ca3-a07a-f9f5645b2cd6" />
-- Observations:
-- There are no unique nodes shown for generation 3 and generation 4, they are only present in the shared black nodes, this may inidcate that the system has reached a fixed point
-- There are only about 4 shared expresisons, 3 of which are shared across all generations. These expressions are increidbly long and complex as shown in the screenshots 
-<img width="406" height="362" alt="Screenshot 2026-04-13 204543" src="https://github.com/user-attachments/assets/0418478c-0af5-4c22-8a68-7a8ec5962d38" />
-<img width="452" height="358" alt="Screenshot 2026-04-13 204443" src="https://github.com/user-attachments/assets/f7d47010-7335-4345-a360-8a92da8ff093" />
-<img width="486" height="569" alt="Screenshot 2026-04-13 204431" src="https://github.com/user-attachments/assets/1aa6b8ad-0b59-40a3-a760-03fe50ba3e49" />
+   -Exp 1 = Parent Generation (Gen 1)
+   - Exp 2 = Generation 2
+   - Exp 3 = Generation 3
+   - Exp 4 = Generation 4
+   - Exp 5 = OUTGROUP
+   <img width="1433" height="820" alt="Screenshot 2026-04-13 211506" src="https://github.com/user-attachments/assets/f36e041c-9e08-4097-9b97-67747221e3ac" />
+   - Observations:
+   - There are a good ammount of shared nodes (about 30)
+   - One thing that I found interesting was there there was a shared expression between the parent generation and generation 4, that generation must of disappeared in the other generations or lost popularity then reappared again in the last generation
+     <img width="453" height="270" alt="Screenshot 2026-04-13 211724" src="https://github.com/user-attachments/assets/d7c5c2f6-e358-4d06-b46e-c1e37f91cb5c" />
+
+
 
 ## Discussion
 

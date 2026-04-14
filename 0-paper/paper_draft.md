@@ -242,6 +242,25 @@ Implementation steps:
     - Jaccard vs bray curtis:
         - Before Extinction:
         - After extinction:
+     
+    - Multi-dendrogram comparison:
+      
+- Shortest most popular expression:
+    - Entropy plots:
+        - Before extinction:
+  
+        - After Extinction:
+
+    - Unique Expressions over time:
+        - Before Extinction:
+        - After Extinction:
+          
+    - Jaccard vs bray curtis:
+        - Before Extinction:
+        - After extinction:
+     
+    - Multi-dendrogram comparison:
+      
 
 
 

@@ -221,7 +221,7 @@ Implementation steps:
 - Observations:
 - There are no unique nodes shown for generation 3 and generation 4, they are only present in the shared black nodes, this may inidcate that the system has reached a fixed point
 - There are only about 4 shared expresisons, 3 of which are shared across all generations. These expressions are increidbly long and complex as shown in the screenshots 
-<img width="425" height="474" alt="Screenshot 2026-04-13 204447" src="https://github.com/user-attachments/assets/02c0baff-ab3e-40a9-b617-5b7ac5616ad3" />
+<img width="406" height="362" alt="Screenshot 2026-04-13 204543" src="https://github.com/user-attachments/assets/0418478c-0af5-4c22-8a68-7a8ec5962d38" />
 <img width="452" height="358" alt="Screenshot 2026-04-13 204443" src="https://github.com/user-attachments/assets/f7d47010-7335-4345-a360-8a92da8ff093" />
 <img width="486" height="569" alt="Screenshot 2026-04-13 204431" src="https://github.com/user-attachments/assets/1aa6b8ad-0b59-40a3-a760-03fe50ba3e49" />
 

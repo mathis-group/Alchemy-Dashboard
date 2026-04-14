@@ -198,9 +198,21 @@ Implementation steps:
 
 ## Results
 1) Experiment 1: Comparing Different Seeds
+- Exp 1 = seed 45
+- Exp 2 = Seed 280
+- Exp 3 = Seed 3017
+- Exp 4 = OUTGROUP
+  
 <img width="1291" height="692" alt="Screenshot 2026-04-12 215430" src="https://github.com/user-attachments/assets/0cc1b54b-a494-4f12-b681-3c15281a210e" />
+- Observations:
+- Each simulation has their own cluster of similar expressions shown in the dendrogram
+-  exp 1 and exp2 have some shared expressions however, exp 3 does not have any shared expressions with any of the other experiments -> this could suggeste that some expressions are more likely to be created regardless of the seed.
+-  One interesting observation was that even very complex and long lambda expressions were shared between seed 45 and seed 280, although a lot of the shared expressions are shorter and simple, this image below tells a different story
+  <img width="1136" height="803" alt="Screenshot 2026-04-13 202749" src="https://github.com/user-attachments/assets/a970d7a6-8863-4224-8ac6-fa9bf36585c8" />
 
-2) Experiment 2: Recursive Experiment
+  
+
+3) Experiment 2: Recursive Experiment
 ## Discussion
 
 ### Next steps for AlChemy

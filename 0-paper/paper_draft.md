@@ -231,11 +231,17 @@ Implementation steps:
 3) Experiment 3: Extinction Experiment
 - Longest most popular expression:
     - Entropy plots:
-- Before extinction:
+        - Before extinction:
   
-- After Extinction:
+        - After Extinction:
 
-- 
+    - Unique Expressions over time:
+        - Before Extinction:
+        - After Extinction:
+          
+    - Jaccard vs bray curtis:
+        - Before Extinction:
+        - After extinction:
 
 
 

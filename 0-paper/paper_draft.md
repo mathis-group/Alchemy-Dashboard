@@ -120,7 +120,7 @@ Here is how it is implemented:
 
 ##### Experimental Tools
 
-1)Simulate extinction: This tool allows for users to simulate an extinction even by taking an expression and removing it from the soup. The user can pick between the most popular expressions however the most popular expression of all time is highlighted to allow users to replicate a high stakes extinciton event
+1)Simulate extinction: This tool allows for users to simulate an extinction even by taking an expression and removing it from the soup. The user can pick between the most popular expressions however the most popular expression of all time is highlighted to allow users to replicate a high stakes extinciton event. *Note: there are two different versions of this extinction button, one that allows for the soup to refill after an extinction event and one that leaves the population as is.*
 Implementation Steps:
 - 1) Create a new empty dictionary for survivors 
 - 2)For each expression present in the final state of the experiment, if it matches the selected target expression, get rid of it else add that expression and its count to the dictionary
@@ -227,7 +227,7 @@ Implementation steps:
      <img width="453" height="270" alt="Screenshot 2026-04-13 211724" src="https://github.com/user-attachments/assets/d7c5c2f6-e358-4d06-b46e-c1e37f91cb5c" />
 
 3) Experiment 3: Extinction Experiment
-- Longest most popular expression:
+- Longest most popular expression (no refilling of soup):
 - <img width="1070" height="513" alt="Screenshot 2026-04-13 220445" src="https://github.com/user-attachments/assets/bcfd0f26-4522-48b7-8c17-f75091f83bc4" />
 
     - Entropy plots:
@@ -244,8 +244,40 @@ Implementation steps:
         - After extinction:
      
     - Multi-dendrogram comparison:
+    - 
+- Longest most popular expression (refill soup):
+    - Entropy plots:
+        - Before extinction:
+  
+        - After Extinction:
+
+    - Unique Expressions over time:
+        - Before Extinction:
+        - After Extinction:
+          
+    - Jaccard vs bray curtis:
+        - Before Extinction:
+        - After extinction:
+     
+    - Multi-dendrogram comparison:
       
-- Shortest most popular expression: \a.a
+- Shortest most popular expression (no refilling of soup): \a.a
+    - Entropy plots:
+        - Before extinction:
+  
+        - After Extinction:
+
+    - Unique Expressions over time:
+        - Before Extinction:
+        - After Extinction:
+          
+    - Jaccard vs bray curtis:
+        - Before Extinction:
+        - After extinction:
+     
+    - Multi-dendrogram comparison:
+
+- Shortest most popular expression (refill soup): \a.a
     - Entropy plots:
         - Before extinction:
   

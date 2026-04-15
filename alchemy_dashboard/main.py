@@ -644,56 +644,62 @@ def sequence_alignment(config_id):
 def trigger_extinction():
     try:
         data = request.get_json()
-        parent_config_id = data.get('config_id')
-        target_expr = data.get('target_expression')
+        parent_id = data.get('config_id')
+        target_expr = data.get('target_expression', '').strip()
+        should_refill = data.get('refill', False) 
 
-        if not parent_config_id or not target_expr:
-            return jsonify({'status': 'error', 'message': 'Missing config_id or target_expression'}), 400
+        if not parent_id or not target_expr:
+            return jsonify({'status': 'error', 'message': 'Missing data'}), 400
 
-        parent_data = get_experiment_details(parent_config_id)
-        if not parent_data or not parent_data[0]:
-            return jsonify({'status': 'error', 'message': 'Parent data not found.'}), 404
-        
+        parent_data = get_experiment_details(parent_id)
         parent_config = parent_data[0]
-        
-        final_state = get_expressions_for_collision(parent_config_id, -1)
-        if not final_state:
-            return jsonify({'status': 'error', 'message': 'Final population state not found.'}), 404
+        final_state = get_expressions_for_collision(parent_id, -1)
 
-        survivors = [item for item in final_state if item[0].strip() != target_expr.strip()]
-
+        # 1. Filter survivors
+        survivors = [item for item in final_state if item[0].strip() != target_expr]
         if not survivors:
-            return jsonify({'status': 'error', 'message': 'Extinction killed everything! No survivors.'}), 400
+            return jsonify({'status': 'error', 'message': 'Extinction wiped out everyone!'}), 400
 
+        # 2. Handle Pool Generation (Proportional Refill Logic)
         survivor_pool = []
-        for expr, count in survivors:
-            survivor_pool.extend([expr] * count)
-
-        new_seed = parent_config[1] or 42
+        mode_label = "Refill" if should_refill else "Standard"
         
+        if should_refill:
+            original_n = sum(count for _, count in final_state)
+            current_n = sum(count for _, count in survivors)
+            scale_factor = original_n / current_n
+            for expr, count in survivors:
+                scaled_count = int(round(count * scale_factor))
+                survivor_pool.extend([expr] * scaled_count)
+        else:
+            for expr, count in survivors:
+                survivor_pool.extend([expr] * count)
+
+        short_target = (target_expr[:12] + "..") if len(target_expr) > 12 else target_expr
+        temp_name = f"Extinction ({mode_label}) - Removed: {short_target}"
+
+        # 3. Run forked experiment with Seed + 1
         config = {
             'generator_type': 'from_file', 
             'expressions': survivor_pool,
             'total_collisions': parent_config[3], 
             'polling_frequency': parent_config[4], 
-            'random_seed': new_seed,
-            'experiment_name': f"Post-Extinction: {target_expr[:15]}... (From: {parent_config_id})",
+            'random_seed': (parent_config[1] or 42) + 1,
+            'experiment_name': temp_name
         }
-
         result = run_experiment(config)
-        
+
+        # 4. Save to Database
         new_id = save_configuration(
-            random_seed=config['random_seed'], 
-            generator_type='from_file', 
-            total_collisions=config['total_collisions'],
-            polling_frequency=config['polling_frequency'], 
-            probability_range=json.dumps({
-                'event': 'targeted_extinction', 
-                'removed': target_expr[:50] + "..." if len(target_expr) > 50 else target_expr
-            }),
-            name=config['experiment_name']
+            config['random_seed'], 'from_file', config['total_collisions'],
+            config['polling_frequency'], 
+            json.dumps({'event': 'extinction', 'refill': should_refill, 'purged': target_expr}),
+            temp_name
         )
 
+        update_experiment_name(new_id, f"Experiment #{new_id}: Extinction ({mode_label}) - Removed: {short_target}")
+
+        # Save results and link lineage
         for expr, count in Counter(survivor_pool).items():
             save_experiment_state(new_id, 0, expr, count)
 
@@ -704,16 +710,11 @@ def trigger_extinction():
                 for expr, count in Counter(metric['expressions']).items():
                     save_experiment_state(new_id, metric['collision_number'], expr, count)
 
-        save_continuation_metadata(new_id, parent_config_id, 1.0, len(survivor_pool), 0)
+        save_continuation_metadata(new_id, parent_id, 1.0, len(survivor_pool), 0)
 
-        return jsonify({
-            'status': 'success', 
-            'new_config_id': new_id,
-            'message': f"Successfully purged target. Soup continues with {len(survivor_pool)} surviving particles."
-        })
+        return jsonify({'status': 'success', 'new_config_id': new_id})
 
     except Exception as e:
-        print(f"CRITICAL ERROR IN EXTINCTION: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
 
 

@@ -362,14 +362,17 @@
                         <select id="extinction-target-dropdown" class="form-control font-monospace" style="font-size: 0.8rem;">
                             <option value="">-- Loading Population... --</option>
                         </select>
-
-                        <div id="extinction-target-preview" class="mt-2 p-2 border rounded bg-white small font-monospace" style="display:none; word-break: break-all;">
-                        </div>
+                        <div id="extinction-target-preview" class="mt-2 p-2 border rounded bg-white small font-monospace" style="display:none; word-break: break-all;"></div>
                     </div>
 
-                    <button class="btn btn-outline-danger w-100 fw-bold" id="extinction-tab-btn" onclick="triggerExtinctionFromTab()" disabled>
-                        Execute Targeted Extinction
-                    </button>
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-outline-danger fw-bold" id="extinction-standard-btn" onclick="triggerExtinctionFromTab(false)" disabled>
+                            Standard Extinction (Smaller Soup)
+                        </button>
+                        <button class="btn btn-danger fw-bold" id="extinction-refill-btn" onclick="triggerExtinctionFromTab(true)" disabled>
+                            Extinction + Proportional Refill
+                        </button>
+                    </div>
                 </div>
             </div>
             <!-- Invasive Species Card -->
@@ -440,8 +443,8 @@ function switchDatabaseTab(tabName) {
 
     function populateExtinctionDropdown(configId) {
         const dropdown = document.getElementById('extinction-target-dropdown');
-        const btn = document.getElementById('extinction-tab-btn');
-        const preview = document.getElementById('extinction-target-preview'); // New
+        const standardBtn = document.getElementById('extinction-standard-btn');
+        const refillBtn = document.getElementById('extinction-refill-btn');
 
         if (!dropdown || !configId) return;
 
@@ -450,27 +453,21 @@ function switchDatabaseTab(tabName) {
             .then(data => {
                 if (data.status === "success" && data.expressions) {
                     const counts = {};
-                    data.expressions.forEach(expr => {
-                        counts[expr] = (counts[expr] || 0) + 1;
-                    });
-
-                    const sorted = Object.entries(counts)
-                        .sort((a, b) => b[1] - a[1])
-                        .slice(0, 20);
+                    data.expressions.forEach(expr => { counts[expr] = (counts[expr] || 0) + 1; });
+                    const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 20);
 
                     dropdown.innerHTML = '<option value="" disabled selected>-- Select a molecule --</option>';
                     sorted.forEach(([expr, count]) => {
                         const opt = document.createElement('option');
                         opt.value = expr;
-                      
-                        const displayExpr = expr.length > 50 ? expr.substring(0, 47) + "..." : expr;
-                        opt.textContent = `[Pop: ${count}] ${displayExpr}`;
+                        opt.textContent = `[Pop: ${count}] ${expr.substring(0, 45)}...`;
                         dropdown.appendChild(opt);
                     });
 
-                    // Update both the button and the preview box on change
                     dropdown.onchange = () => {
-                        btn.disabled = !dropdown.value;
+                        const hasValue = !!dropdown.value;
+                        standardBtn.disabled = !hasValue;
+                        refillBtn.disabled = !hasValue;
                         updateExtinctionPreview(dropdown.value);
                     };
                 }
@@ -517,22 +514,28 @@ function switchDatabaseTab(tabName) {
     }
 
     // Updated execution function
-    function triggerExtinctionFromTab() {
+    function triggerExtinctionFromTab(refill = false) {
         const target = document.getElementById('extinction-target-dropdown').value;
         if (!target) return;
 
-        if (!confirm("Confirm targeted extinction? This will fork the simulation.")) return;
+        const modeText = refill ? "Extinction with Proportional Refill" : "Standard Extinction";
+        if (!confirm(`Confirm ${modeText}? This will fork a new simulation timeline.`)) return;
 
-        const btn = document.getElementById('extinction-tab-btn');
-        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Loading...';
+        // Toggle UI loading state
+        const btn = refill ? document.getElementById('extinction-refill-btn') : document.getElementById('extinction-standard-btn');
+        const otherBtn = refill ? document.getElementById('extinction-standard-btn') : document.getElementById('extinction-refill-btn');
+
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
         btn.disabled = true;
+        otherBtn.disabled = true;
 
         fetch('/trigger_extinction', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 config_id: window.currentConfigID,
-                target_expression: target
+                target_expression: target,
+                refill: refill
             })
         })
             .then(res => res.json())
@@ -540,9 +543,10 @@ function switchDatabaseTab(tabName) {
                 if (data.status === 'success') {
                     window.location.href = `/database?config_id=${data.new_config_id}`;
                 } else {
-                    alert("Error: " + data.message);
-                    btn.innerHTML = 'Execute Targeted Extinction';
+                    alert("Extinction Error: " + data.message);
+                    btn.innerHTML = refill ? 'Extinction + Proportional Refill' : 'Standard Extinction (Smaller Soup)';
                     btn.disabled = false;
+                    otherBtn.disabled = false;
                 }
             });
     }

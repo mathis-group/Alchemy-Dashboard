@@ -12,7 +12,7 @@
     {% block extra_head %}{% endblock %}
 </head>
 <body>
-    {{ bokeh_script|safe }} 
+    {{ bokeh_script|safe }}
     <header>
         <div class="container">
             <div class="header-content">
@@ -40,6 +40,10 @@
                     <i class="fas fa-chart-line"></i>
                     <span>Run Simulation</span>
                 </a>
+                <button class="nav-button" onclick="document.getElementById('import-json-input').click()" style="color: #10B981; border: none; background: none; cursor: pointer;">
+                    <i class="fas fa-file-import"></i>
+                    <span>Import JSON</span>
+                </button>
             </div>
         </div>
 
@@ -48,5 +52,30 @@
     </div>
 
     {% block scripts %}{% endblock %}
+    <input type="file" id="import-json-input" style="display: none;" accept=".json">
+
+    <script>
+        document.getElementById('import-json-input').addEventListener('change', function (e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            fetch('/upload_and_import', {
+                method: 'POST',
+                body: formData
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        window.location.href = `/database?config_id=${data.new_config_id}`;
+                    } else {
+                        alert("Import failed: " + data.message);
+                    }
+                })
+                .catch(err => alert("Server error during import."));
+        });
+    </script>
 </body>
 </html> 

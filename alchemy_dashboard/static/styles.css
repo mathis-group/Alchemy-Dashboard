@@ -1560,4 +1560,53 @@
     
     }
 
- 
+
+#extinction-btn {
+    margin-top: 2rem !important;
+}
+
+/* Pushes the Inject Species button down */
+#invasive-tab-btn {
+    margin-top: 2.0rem !important;
+}
+
+/* Adds space under the description text in Export Tools */
+#export-tools-card p.text-muted {
+    margin-bottom: 1.5rem !important;
+}
+
+/* Adds space between the two Export JSON buttons */
+#download-final-state-btn {
+    margin-bottom: 1rem !important;
+}
+
+/* Makes all three of these specific buttons a little taller/chunkier */
+#extinction-btn,
+#invasion-btn,
+#download-final-state-btn,
+#download-initial-state-btn {
+    padding-top: 0.85rem;
+    padding-bottom: 0.85rem;
+}
+
+#fresh-form button[type="submit"],
+#recursive-form button[type="submit"] {
+    margin-top: 2rem !important;
+    padding-top: 0.85rem !important;
+    padding-bottom: 0.85rem !important;
+}
+
+#from-file-options,
+#fontana-options,
+#btree-options {
+    margin-bottom: 2rem !important;
+}
+
+/* Delete Actions Card Button Spacing */
+#delete-experiment-tab-btn {
+    margin-bottom: 1.5rem !important;
+}
+
+#delete-all-experiments-btn {
+    margin-top: 0.5rem !important;
+}

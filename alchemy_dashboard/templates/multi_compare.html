@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+
+{% block title %}Multiple Experiment Comparison - Alchemy Dashboard{% endblock %}
+
+{% block content %}
+<style>
+    
+    .experiment-row {
+        cursor: pointer;
+        transition: all 0.2s ease;
+        border-left: 5px solid transparent;
+        background-color: white;
+    }
+
+        .experiment-row:hover {
+            background-color: #f8fafc;
+        }
+
+        .experiment-row.selected {
+            background-color: #eff6ff; 
+            border-left: 5px solid #3b82f6; 
+        }
+
+    .exp-check {
+        pointer-events: none; 
+        transform: scale(1.2);
+    }
+</style>
+
+<div class="container mt-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+        <div>
+            <h2><i class="fas fa-network-wired text-primary"></i> Multiple-Experiment Comparison</h2>
+            <p class="text-muted">Click rows to select a collection of experiments for global dendrogram tree analysis.</p>
+        </div>
+        <button class="btn btn-outline-secondary" onclick="selectAll()">Select All Experiments</button>
+    </div>
+
+    <div class="row">
+        <div class="col-md-4">
+            <div class="card shadow-sm">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0">Select Experiments</h5>
+                </div>
+                <div class="card-body p-0" id="experiment-list" style="max-height: 600px; overflow-y: auto;">
+                    <div class="text-center p-4">
+                        <i class="fas fa-spinner fa-spin fa-2x"></i><br>
+                        Fetching Database...
+                    </div>
+                </div>
+
+                <div class="form-group mb-3 px-3">
+                    <label class="form-label fw-bold small text-uppercase">Sample Size (Top Survivors)</label>
+                    <select id="sample-size" class="form-select form-select-sm">
+                        <option value="10">Top 10 Molecules</option>
+                        <option value="20" selected>Top 20 Molecules</option>
+                        <option value="30">Top 30 Molecules</option>
+                    </select>
+                </div>
+
+                <div class="card-footer bg-white">
+                    <button class="btn btn-primary w-100 fw-bold" id="run-btn" onclick="runMultiCompare()">
+                        Generate Global Dendrogram Tree
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-8">
+            <div class="card shadow-sm h-100">
+                <div class="card-body" id="plot-container">
+                    <div class="text-center py-5 text-muted">
+                        <h4>No Data Selected</h4>
+                        <p>Select multiple experiments from the sidebar to map their molecular overlaps.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // populate list of experiments
+    document.addEventListener("DOMContentLoaded", function () {
+        fetch('/list_experiments')
+            .then(res => res.json())
+            .then(data => {
+                const list = document.getElementById('experiment-list');
+                list.innerHTML = '';
+
+                data.experiments.forEach(exp => {
+                    const row = document.createElement('div');
+                    row.className = "experiment-row p-3 border-bottom d-flex align-items-center";
+                    row.dataset.id = exp.config_id;
+
+                    row.innerHTML = `
+                    <div class="me-3">
+                        <input type="checkbox" class="exp-check" id="check_${exp.config_id}">
+                    </div>
+                    <div>
+                        <div class="fw-bold">ID: ${exp.config_id} ${exp.name ? '- ' + exp.name : ''}</div>
+                        <small class="text-muted">Seed: ${exp.random_seed} | ${exp.generator_type}</small>
+                    </div>
+                `;
+
+                    // toggle
+                    row.addEventListener('click', function () {
+                        this.classList.toggle('selected');
+                        const cb = this.querySelector('.exp-check');
+                        cb.checked = !cb.checked;
+                    });
+
+                    list.appendChild(row);
+                });
+            });
+    });
+
+    // select/desleect
+    function selectAll() {
+        const rows = document.querySelectorAll('.experiment-row');
+        const allOn = Array.from(rows).every(r => r.classList.contains('selected'));
+        rows.forEach(r => {
+            if (allOn) { r.classList.remove('selected'); r.querySelector('.exp-check').checked = false; }
+            else { r.classList.add('selected'); r.querySelector('.exp-check').checked = true; }
+        });
+    }
+
+    // send Ids to backend
+    function runMultiCompare() {
+        const selected = Array.from(document.querySelectorAll('.experiment-row.selected'))
+            .map(r => parseInt(r.dataset.id));
+        const topN = parseInt(document.getElementById('sample-size').value);
+
+
+        if (selected.length < 2) {
+            alert("Please select at least 2 experiments to compare.");
+            return;
+        }
+
+        const container = document.getElementById('plot-container');
+        
+
+        fetch('/api/generate_multi_dendrogram', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ experiment_ids: selected, limit: topN})
+        })
+            .then(res => res.json())
+            .then(data => {
+                if (data.status === 'success') {
+                    container.innerHTML = data.div;
+                    const script = document.createElement('script');
+                    script.textContent = data.script;
+                    document.body.appendChild(script);
+                } else {
+                    container.innerHTML = `<div class="alert alert-danger">${data.message}</div>`;
+                }
+            });
+    }
+
+
+</script>
+{% endblock %}

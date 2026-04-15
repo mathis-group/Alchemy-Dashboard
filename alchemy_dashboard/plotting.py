@@ -82,84 +82,6 @@ def create_styled_figure(title, x_label, y_label, width=800, height=300):
 
     return fig
 
-# from bokeh.models import ColumnDataSource, HoverTool, TapTool, CustomJS
-
-# def plot_experiment_metrics(df):
-#     """
-#     Create plots for a single experiment's metrics.
-    
-#     Args:
-#         df (DataFrame): DataFrame with collision_number, entropy, unique_expressions_count
-        
-#     Returns:
-#         list: List of Bokeh figure objects
-#     """
-#     source = ColumnDataSource(data=dict(
-#         x=df['collision_number'],
-#         entropy=df['entropy'],
-#         unique=df['unique_expressions_count'],
-#         total=df.get('total_expressions', [0] * len(df))
-#     ))
-
-#     # === Entropy plot ===
-#     entropy_plot = create_styled_figure("Entropy Over Time", "Collision Number", "Entropy")
-#     entropy_plot.line('x', 'entropy', source=source, line_width=2.5, color=PRIMARY_COLOR, line_alpha=0.8)
-
-#     # TapTool requires a selectable glyph — use scatter with selection color
-#     entropy_plot.scatter('x', 'entropy', source=source, size=8, color=PRIMARY_COLOR,
-#                          alpha=0.6, selection_color="red", nonselection_alpha=0.4)
-
-#     entropy_plot.add_tools(HoverTool(tooltips=[
-#         ("Collision", "@x"),
-#         ("Entropy", "@entropy{0.0000}")
-#     ], mode='vline'))
-
-#     # === Unique expressions plot ===
-#     unique_plot = create_styled_figure("Unique Expressions Over Time", "Collision Number", "Count")
-#     unique_plot.line('x', 'unique', source=source, line_width=2.5, color=SECONDARY_COLOR, line_alpha=0.8)
-#     unique_plot.scatter('x', 'unique', source=source, size=6, color=SECONDARY_COLOR, alpha=0.6)
-#     unique_plot.add_tools(HoverTool(tooltips=[
-#         ("Collision", "@x"),
-#         ("Unique Expressions", "@unique")
-#     ], mode='vline'))
-
-#     plots = [entropy_plot, unique_plot]
-
-#     # === Optional: Total expressions plot ===
-#     if 'total_expressions' in df.columns:
-#         total_plot = create_styled_figure("Total Expressions Over Time", "Collision Number", "Count")
-#         total_plot.line('x', 'total', source=source, line_width=2.5, color=ACCENT_COLOR, line_alpha=0.8)
-#         total_plot.scatter('x', 'total', source=source, size=6, color=ACCENT_COLOR, alpha=0.6)
-#         total_plot.add_tools(HoverTool(tooltips=[
-#             ("Collision", "@x"),
-#             ("Total Expressions", "@total")
-#         ], mode='vline'))
-#         plots.append(total_plot)
-
-#     # === Enable TapTool and attach JS callback ===
-#     entropy_plot.add_tools(TapTool())
-
-#     tap_callback = CustomJS(args=dict(source=source), code="""
-#         const selected_index = source.selected.indices[0];
-#         if (selected_index != null) {
-#             const collision = source.data['x'][selected_index];
-#             fetch(`/get_entropy_detail/${collision}?config_id=${window.currentConfigID}`)
-#                 .then(response => response.text())
-#                 .then(html => {
-#                     const target = document.getElementById("entropy-details");
-#                     if (target) {
-#                         target.innerHTML = html;
-#                         target.scrollIntoView({ behavior: "smooth" });
-#                     }
-#                 });
-#         }
-#     """)
-#     source.selected.js_on_change('indices', tap_callback)
-
-#     return plots
-
-
-
 
 
 
@@ -681,3 +603,140 @@ def ASTErr(message):
     p.xaxis.visible = False
     p.yaxis.visible = False
     return p
+
+
+# multiple experiment dendrogram
+
+def create_multi_experiment_dendrogram(config_ids, limit=20):
+    from scipy.cluster.hierarchy import linkage, dendrogram
+    import pandas as pd
+    import numpy as np
+    import Levenshtein
+    from scipy.spatial.distance import squareform
+    from sklearn.metrics import pairwise_distances
+    from bokeh.plotting import figure
+    from bokeh.embed import components
+    from bokeh.models import ColumnDataSource, HoverTool
+    from .db_utils import get_comparison_data
+
+    PALETTE = ["#4F46E5", "#EF4444", "#10B981", "#F59E0B", "#8B5CF6", "#EC4899", "#06B6D4"]
+    
+    molecule_metadata = []
+    seen_expressions = {} 
+
+    #gather data using user defined molecules
+    for i, cid in enumerate(config_ids):
+        df = get_comparison_data(cid, most=limit) 
+        if not df.empty:
+            color = PALETTE[i % len(PALETTE)]
+            for expr in df['expression'].unique():
+                if expr not in seen_expressions:
+                    seen_expressions[expr] = {'origins': [], 'colors': []}
+                seen_expressions[expr]['origins'].append(f"Exp {cid}")
+                seen_expressions[expr]['colors'].append(color)
+
+    unique_list = list(seen_expressions.keys())
+    
+    # matrix math
+    dist_matrix = pairwise_distances(
+        np.array(unique_list).reshape(-1, 1), 
+        metric=lambda x, y: Levenshtein.distance(str(x[0]), str(y[0]))
+    )
+    Z = linkage(squareform(dist_matrix), method='average')
+    ddata = dendrogram(Z, no_plot=True)
+    
+    p = figure(title=f"Dendrogram: (Top {limit} Survivors)", 
+               height=600, sizing_mode="stretch_width",
+               toolbar_location="above", tools="pan,wheel_zoom,reset,save")
+    
+    # draw branches
+    source = ColumnDataSource(data={'xs': ddata['icoord'], 'ys': ddata['dcoord']})
+    p.multi_line('xs', 'ys', source=source, color="black", line_width=1.5)
+
+
+    # If a molecule is shared color grey
+    # If it's unique use specific experiment color
+    leaves = ddata['leaves']
+    ordered_labels = [unique_list[leaf] for leaf in leaves]
+    
+    final_colors = []
+    final_origins = []
+    
+    for label in ordered_labels:
+        data = seen_expressions[label]
+        if len(data['origins']) > 1:
+            final_colors.append("#1e293b")
+            final_origins.append(f"SHARED: {', '.join(data['origins'])}")
+        else:
+            final_colors.append(data['colors'][0]) 
+            final_origins.append(data['origins'][0])
+
+    leaf_source = ColumnDataSource(data={
+        'x': [(i * 10) + 5 for i in range(len(ordered_labels))],
+        'y': [0] * len(ordered_labels),
+        'detail': ordered_labels,
+        'origin': final_origins,
+        'color': final_colors
+    })
+    
+    leaf_renderer = p.circle('x', 'y', source=leaf_source, size=12, 
+                             color='color', line_color="white", line_width=1)
+
+    #legend logic 
+    legend_items = []
+    
+    # add key item from each experiment
+    for i, cid in enumerate(config_ids):
+        color = PALETTE[i % len(PALETTE)]
+        dummy_glyph = p.circle(x=[float('nan')], y=[float('nan')], size=10, color=color, line_color="white")
+        legend_items.append((f"Exp {cid} (Unique)", [dummy_glyph]))
+        
+    # key for shared molecules
+    dummy_shared = p.circle(x=[float('nan')], y=[float('nan')], size=10, color="#1e293b", line_color="white")
+    legend_items.append(("Convergent (Shared)", [dummy_shared]))
+    
+    # assemble legend
+    from bokeh.models import Legend 
+    
+    legend = Legend(
+        items=legend_items, 
+        title="Origin Key",
+        title_text_font_style="bold",
+        background_fill_color="#f8fafc",
+        border_line_color="#cbd5e1",
+        padding=10
+    )
+    p.add_layout(legend, 'right')
+
+    # tooltip with expression and origin info
+    hover_html = """
+        <div style="
+            padding: 10px; 
+            background-color: #1e293b; 
+            color: white; 
+            border-radius: 8px; 
+            max-width: 300px; 
+            word-wrap: break-word; 
+            font-family: 'Courier New', monospace;
+            box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+        ">
+            <div style="font-size: 10px; text-transform: uppercase; color: #94a3b8; margin-bottom: 4px; font-weight: bold;">
+                Source: @origin
+            </div>
+            <div style="font-size: 13px; line-height: 1.4; color: #38bdf8;">
+                @detail
+            </div>
+        </div>
+    """
+
+    p.add_tools(HoverTool(
+        renderers=[leaf_renderer], 
+        tooltips=hover_html,
+        attachment="vertical",
+        point_policy="follow_mouse"
+    ))
+
+    p.xaxis.major_label_text_color = None 
+    p.yaxis.axis_label = "Edit Distance"
+    
+    return components(p)

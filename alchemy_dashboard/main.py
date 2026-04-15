@@ -208,11 +208,13 @@ def continuation_config(config_id):
 @app.route('/download_initial_state/<int:config_id>')
 def download_initial_state(config_id):
     try:
-        config, _, initial_expressions = get_experiment_details(config_id)
+        config, metrics, initial_expressions = get_experiment_details(config_id)
         if not config:
             return "Experiment not found", 404
 
         continuation = get_continuation_metadata(config_id)
+        
+        # Build the payload
         payload = {
             'config_id': config_id,
             'name': config[8] or f'Experiment {config_id}',
@@ -222,17 +224,26 @@ def download_initial_state(config_id):
             'polling_frequency': config[4],
             'timestamp': config[7],
             'continuation': continuation,
-            'initial_expression_counts': [{'expression': expr, 'count': count} for expr, count in initial_expressions]
+            'initial_expression_counts': [{'expression': expr, 'count': count} for expr, count in initial_expressions],
+            
+            # Graph data so it can be re-uploaded to the UI
+            'collisions_data': {
+                "experiment_history": {
+                    str(m[0]): {
+                        "entropy": m[1],
+                        "unique_expressions": m[2]
+                    } for m in metrics
+                }
+            }
         }
 
         if not payload['initial_expression_counts']:
-            return "No initial expressions recorded for this experiment", 404
+            return "No initial expressions recorded", 404
 
         buffer = io.BytesIO()
         buffer.write(json.dumps(payload, indent=2).encode('utf-8'))
         buffer.seek(0)
-        filename = f"experiment_{config_id}_initial_state.json"
-        return send_file(buffer, mimetype='application/json', as_attachment=True, download_name=filename)
+        return send_file(buffer, mimetype='application/json', as_attachment=True, download_name=f"experiment_{config_id}_initial_full.json")
     except Exception as exc:
         return jsonify({'status': 'error', 'message': str(exc)}), 500
 
@@ -245,23 +256,33 @@ def download_final_state(config_id):
 
         final_state = get_expressions_for_collision(config_id, -1)
         if not final_state:
-            return "No final state data available for this experiment", 404
+            return "No final state data available", 404
 
         last_collision = metrics[-1][0] if metrics else None
+        
+        # Build the payload
         payload = {
             'config_id': config_id,
             'name': config[8] or f'Experiment {config_id}',
             'generator_type': config[2],
             'timestamp': config[7],
             'last_collision_number': last_collision,
-            'final_state_counts': [{'expression': expr, 'count': count} for expr, count in final_state]
+            'final_state_counts': [{'expression': expr, 'count': count} for expr, count in final_state],
+            
+            'collisions_data': {
+                "experiment_history": {
+                    str(m[0]): {
+                        "entropy": m[1],
+                        "unique_expressions": m[2]
+                    } for m in metrics
+                }
+            }
         }
 
         buffer = io.BytesIO()
         buffer.write(json.dumps(payload, indent=2).encode('utf-8'))
         buffer.seek(0)
-        filename = f"experiment_{config_id}_final_state.json"
-        return send_file(buffer, mimetype='application/json', as_attachment=True, download_name=filename)
+        return send_file(buffer, mimetype='application/json', as_attachment=True, download_name=f"experiment_{config_id}_final_full.json")
     except Exception as exc:
         return jsonify({'status': 'error', 'message': str(exc)}), 500
 
@@ -290,6 +311,64 @@ def download_initial_expressions(config_id):
     except Exception as exc:
         return jsonify({'status': 'error', 'message': str(exc)}), 500
 
+@app.route('/upload_and_import', methods=['POST'])
+def upload_and_import():
+    try:
+        file = request.files.get('file')
+        if not file:
+            return jsonify({'status': 'error', 'message': 'No file received'}), 400
+        
+        data = json.load(file)
+        if 'collisions_data' not in data:
+            return jsonify({'status': 'error', 'message': 'Missing timeline data.'}), 400
+
+        # 1. Save Main Configuration
+        # Probability range needs to be a string for the DB
+        prob_range = json.dumps(data.get('generator_params', {}))
+        
+        new_config_id = save_configuration(
+            data.get('random_seed', 0),
+            data.get('generator_type', 'Imported'),
+            data.get('total_collisions', 1000),
+            data.get('polling_frequency', 10),
+            prob_range,
+            f"{data.get('name', 'Experiment')} (Imported)"
+        )
+
+        # 2. Re-hydrate Graphs (The Timeline)
+        # FIX: Using positional arguments to avoid 'new_id' naming errors
+        history = data['collisions_data'].get('experiment_history', {})
+        for col_num, metrics in history.items():
+            save_averages(
+                new_config_id, 
+                int(col_num), 
+                metrics['entropy'], 
+                metrics['unique_expressions']
+            )
+
+        # 3. Handle Molecular Population (AST & Histogram Fix)
+        final_pop = data.get('final_state_counts', [])
+        initial_pop = data.get('initial_expression_counts', [])
+        last_col = data.get('last_collision_number', -1)
+
+        # Map molecules to Collision 0 so the Sidebar/AST dropdown works
+        startup_data = initial_pop if initial_pop else final_pop
+        for item in startup_data:
+            save_experiment_state(new_config_id, 0, item['expression'], item['count'])
+
+        # Map molecules to Final State (-1) and the specific last collision (e.g., 990)
+        for item in final_pop:
+            save_experiment_state(new_config_id, -1, item['expression'], item['count'])
+            if last_col != -1:
+                save_experiment_state(new_config_id, last_col, item['expression'], item['count'])
+
+        return jsonify({'status': 'success', 'new_config_id': new_config_id})
+
+    except Exception as e:
+        print(f"Import Error: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
 @app.route('/delete_experiment', methods=['POST'])
 def delete_experiment_route():
     try:
@@ -305,110 +384,43 @@ def delete_experiment_route():
     except Exception as exc:
         return jsonify({'status': 'error', 'message': str(exc)}), 500
 
-@app.route('/run_simulation_form', methods=['POST'])
-def run_simulation_form():
+@app.route('/delete_all_experiments', methods=['POST'])
+def delete_all_experiments():
     try:
-        generator_type = request.form.get('generator_type', 'BTree')
-        total_collisions = int(request.form.get('total_collisions', 1000))
-        polling_frequency = int(request.form.get('polling_frequency', 10))
-        random_seed = int(request.form.get('random_seed', 42))
-        experiment_name = request.form.get('experiment_name', '')
-
-        continuation_parent_id = request.form.get('continuation_parent_id')
-        continuation_fraction_raw = request.form.get('continuation_fraction')
-        continuation_info = None
-
-        if continuation_parent_id:
-            parent_id = int(continuation_parent_id)
-            try:
-                fraction_value = float(continuation_fraction_raw or 0)
-            except ValueError:
-                fraction_value = 0.0
-            if fraction_value > 1: fraction_value = fraction_value / 100.0
-            fraction_value = max(0.0, min(1.0, fraction_value))
-            continuation_info = {'parent_config_id': parent_id, 'fraction': fraction_value}
-
-        config = {
-            'generator_type': generator_type, 'total_collisions': total_collisions,
-            'polling_frequency': polling_frequency, 'random_seed': random_seed, 'experiment_name': experiment_name
-        }
-        if continuation_info: config['continuation'] = continuation_info
-
-        generator_params_payload = {}
-        if generator_type == 'BTree':
-            size = int(request.form.get('btree_size', 5))
-            freevar_probability = float(request.form.get('freevar_probability', 0.5))
-            max_free_vars = int(request.form.get('max_free_vars', 3))
-            standardization = request.form.get('standardization', 'prefix')
-            num_expressions = int(request.form.get('num_expressions', 10))
-            config.update({'size': size, 'freevar_probability': freevar_probability, 'max_free_vars': max_free_vars, 'standardization': standardization, 'num_expressions': num_expressions})
-            generator_params_payload = {'size': size, 'freevar_probability': freevar_probability, 'max_free_vars': max_free_vars, 'standardization': standardization, 'num_expressions': num_expressions}
-        elif generator_type == 'Fontana':
-            abs_low = float(request.form.get('abs_low', 0.1))
-            abs_high = float(request.form.get('abs_high', 0.5))
-            app_low = float(request.form.get('app_low', 0.2))
-            app_high = float(request.form.get('app_high', 0.6))
-            min_depth = int(request.form.get('min_depth', 1))
-            max_depth = int(request.form.get('max_depth', 5))
-            max_free_vars = int(request.form.get('fontana_max_fv', 2))
-            expression_count = int(request.form.get('fontana_expression_count', 10))
-            free_variable_probability = float(request.form.get('free_variable_probability', 0.5))
-            config.update({'abs_low': abs_low, 'abs_high': abs_high, 'app_low': app_low, 'app_high': app_high, 'min_depth': min_depth, 'max_depth': max_depth, 'max_free_vars': max_free_vars, 'initial_expression_count': expression_count, 'free_variable_probability': free_variable_probability})
-            generator_params_payload = {'abs_low': abs_low, 'abs_high': abs_high, 'app_low': app_low, 'app_high': app_high, 'min_depth': min_depth, 'max_depth': max_depth, 'max_free_vars': max_free_vars, 'initial_expression_count': expression_count, 'free_variable_probability': free_variable_probability}
-        elif generator_type == 'from_file':
-            if 'expressions_file' in request.files:
-                file = request.files['expressions_file']
-                if file.filename:
-                    filename = secure_filename(file.filename)
-                    filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                    file.save(filepath)
-                    config['file_path'] = filepath
-                    generator_params_payload = {'input_mode': 'file', 'filename': filename}
-            elif request.form.get('direct_input'):
-                expressions = [expr for expr in request.form.get('direct_input').split('\n') if expr.strip()]
-                config['expressions'] = expressions
-                generator_params_payload = {'input_mode': 'direct_input', 'expression_count': len(expressions)}
-
-        result = run_experiment(config)
-
-        config_id = save_configuration(
-            random_seed=random_seed, generator_type=generator_type, total_collisions=total_collisions,
-            polling_frequency=polling_frequency, probability_range=json.dumps(generator_params_payload) if generator_params_payload else None,
-            freevar_generation_probability=config.get('freevar_probability') if generator_type == 'BTree' else None, name=experiment_name
-        )
-
-        initial_expressions = result.get('initial_expressions', [])
-        for expr, count in Counter(initial_expressions).items():
-            save_experiment_state(config_id, 0, expr, count)
-
-        metrics = result.get('metrics', [])
-        for metric in metrics:
-            save_averages(config_id, metric['collision_number'], metric['entropy'], metric['unique_expressions'])
-            if 'expressions' in metric:
-                for expr, count in Counter(metric['expressions']).items():
-                    save_experiment_state(config_id, metric['collision_number'], expr, count)
-
-        continuation_summary = result.get('continuation_summary', {})
-        if continuation_summary and continuation_summary.get('parent_config_id'):
-            save_continuation_metadata(config_id, continuation_summary['parent_config_id'], continuation_summary.get('fraction_used', 0.0), continuation_summary.get('continued_expression_count', 0), continuation_summary.get('new_expression_count', 0))
-
-        if metrics:
-            df = process_collision_data(metrics)
-            plots = plot_experiment_metrics(df)
-            entropy_script, entropy_div = components(plots['entropy_plot'])
-            unique_script, unique_div = components(plots['unique_expressions_plot'])
-            bokeh_script, bokeh_div = entropy_script + unique_script, entropy_div + unique_div
-        else:
-            bokeh_script, bokeh_div = "", ""
+        # Get all current experiments
+        experiments = get_experiment_configs()
+        
+        deleted_count = 0
+        for exp in experiments:
+            config_id = exp['config_id'] if isinstance(exp, dict) else exp[0]
+            if delete_experiment(config_id):
+                deleted_count += 1
+            
+        # Reset the ID counter
+        import sqlite3
+        from .config import DB_NAME
+        conn = sqlite3.connect(DB_NAME) 
+        cursor = conn.cursor()
+        
+        try:
+            cursor.execute("DELETE FROM sqlite_sequence") 
+            conn.commit()
+        except sqlite3.OperationalError as e:
+            if "no such table: sqlite_sequence" not in str(e):
+                raise e
+        finally:
+            conn.close()
         
         return jsonify({
-            'status': 'success', 'config_id': config_id, 'experiment_name': experiment_name or f"Experiment {config_id}",
-            'initial_expressions': initial_expressions, 'initial_expression_count': len(initial_expressions),
-            'continuation_summary': continuation_summary, 'download_initial_state_url': url_for('download_initial_state', config_id=config_id) if continuation_summary and continuation_summary.get('parent_config_id') else None,
-            'bokeh_div': bokeh_div, 'script': bokeh_script, 'message': "Simulation completed successfully!"
+            'status': 'success', 
+            'message': f'{deleted_count} experiments deleted and counters reset.'
         })
+
     except Exception as e:
-        return jsonify({'status': 'error', 'message': f"Error running simulation: {str(e)}"}), 500
+        print(f"Error during mass delete: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
 
 @app.route('/debug_db')
 def debug_db():
@@ -492,9 +504,25 @@ def list_experiments():
     result = {'experiments': []}
     for exp in experiments:
         if isinstance(exp, dict):
-            entry = {'config_id': exp.get('config_id'), 'name': exp.get('name'), 'generator_type': exp.get('generator_type'), 'total_collisions': exp.get('total_collisions'), 'polling_frequency': exp.get('polling_frequency'), 'timestamp': exp.get('timestamp')}
+            entry = {
+                'config_id': exp.get('config_id'), 
+                'name': exp.get('name'), 
+                'random_seed': exp.get('random_seed'), 
+                'generator_type': exp.get('generator_type'), 
+                'total_collisions': exp.get('total_collisions'), 
+                'polling_frequency': exp.get('polling_frequency'), 
+                'timestamp': exp.get('timestamp')
+            }
         else:
-            entry = {'config_id': exp[0], 'random_seed': exp[1], 'generator_type': exp[2], 'total_collisions': exp[3], 'polling_frequency': exp[4], 'timestamp': exp[5], 'name': exp[8] if len(exp) > 8 else None}
+            entry = {
+                'config_id': exp[0], 
+                'random_seed': exp[1], 
+                'generator_type': exp[2], 
+                'total_collisions': exp[3], 
+                'polling_frequency': exp[4], 
+                'timestamp': exp[5], 
+                'name': exp[8] if len(exp) > 8 else None
+            }
         result['experiments'].append(entry)
     return jsonify(result)
 
@@ -615,83 +643,314 @@ def sequence_alignment(config_id):
 @app.route('/trigger_extinction', methods=['POST'])
 def trigger_extinction():
     try:
-        
         data = request.get_json()
         parent_config_id = data.get('config_id')
+        target_expr = data.get('target_expression')
+
+        if not parent_config_id or not target_expr:
+            return jsonify({'status': 'error', 'message': 'Missing config_id or target_expression'}), 400
+
+        parent_data = get_experiment_details(parent_config_id)
+        if not parent_data or not parent_data[0]:
+            return jsonify({'status': 'error', 'message': 'Parent data not found.'}), 404
         
+        parent_config = parent_data[0]
+        
+        final_state = get_expressions_for_collision(parent_config_id, -1)
+        if not final_state:
+            return jsonify({'status': 'error', 'message': 'Final population state not found.'}), 404
+
+        survivors = [item for item in final_state if item[0].strip() != target_expr.strip()]
+
+        if not survivors:
+            return jsonify({'status': 'error', 'message': 'Extinction killed everything! No survivors.'}), 400
+
+        survivor_pool = []
+        for expr, count in survivors:
+            survivor_pool.extend([expr] * count)
+
+        new_seed = parent_config[1] or 42
+        
+        config = {
+            'generator_type': 'from_file', 
+            'expressions': survivor_pool,
+            'total_collisions': parent_config[3], 
+            'polling_frequency': parent_config[4], 
+            'random_seed': new_seed,
+            'experiment_name': f"Post-Extinction: {target_expr[:15]}... (From: {parent_config_id})",
+        }
+
+        result = run_experiment(config)
+        
+        new_id = save_configuration(
+            random_seed=config['random_seed'], 
+            generator_type='from_file', 
+            total_collisions=config['total_collisions'],
+            polling_frequency=config['polling_frequency'], 
+            probability_range=json.dumps({
+                'event': 'targeted_extinction', 
+                'removed': target_expr[:50] + "..." if len(target_expr) > 50 else target_expr
+            }),
+            name=config['experiment_name']
+        )
+
+        for expr, count in Counter(survivor_pool).items():
+            save_experiment_state(new_id, 0, expr, count)
+
+        metrics = result.get('metrics', [])
+        for metric in metrics:
+            save_averages(new_id, metric['collision_number'], metric['entropy'], metric['unique_expressions'])
+            if 'expressions' in metric:
+                for expr, count in Counter(metric['expressions']).items():
+                    save_experiment_state(new_id, metric['collision_number'], expr, count)
+
+        save_continuation_metadata(new_id, parent_config_id, 1.0, len(survivor_pool), 0)
+
+        return jsonify({
+            'status': 'success', 
+            'new_config_id': new_id,
+            'message': f"Successfully purged target. Soup continues with {len(survivor_pool)} surviving particles."
+        })
+
+    except Exception as e:
+        print(f"CRITICAL ERROR IN EXTINCTION: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+#route for comparison dendrograms 
+@app.route('/multi_compare')
+def multi_compare_page():
+    # Fetch all experiments so the user can select them from a list
+    experiments = get_experiment_configs()
+    return render_template('multi_compare.html', experiments=experiments, active_page='multi_compare')
+
+# multiple dendrogram api route
+
+@app.route('/api/generate_multi_dendrogram', methods=['POST'])
+def generate_multi_dendrogram():
+    try:
+        data = request.get_json()
+        ids = data.get('experiment_ids', [])
+        
+      
+        user_limit = data.get('limit', 20) 
+        
+        if len(ids) < 2:
+            return jsonify({'status': 'error', 'message': 'Please select at least two experiments to compare.'}), 400
+
+        from .plotting import create_multi_experiment_dendrogram 
+        
+        
+        script, div = create_multi_experiment_dendrogram(ids, limit=user_limit)
+        
+        import re
+        clean_script = re.sub(r'<script[^>]*>', '', script).replace("</script>", "")
+        
+        return jsonify({
+            'status': 'success', 
+            'script': clean_script, 
+            'div': div
+        })
+    except Exception as e:
+        print(f"Error generating dendrogram: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
+@app.route('/run_simulation_form', methods=['POST'])
+def run_simulation_form():
+    try:
+        total_collisions = int(request.form.get('total_collisions', 1000))
+        polling_frequency = int(request.form.get('polling_frequency', 10))
+        random_seed = int(request.form.get('random_seed', 42))
+        base_name = request.form.get('experiment_name', 'Auto-Evo')
+        if not base_name.strip():
+            base_name = 'Auto-Evo'
+            
+        num_generations = int(request.form.get('num_generations', 1))
+        
+        recursive_parent_id = request.form.get('recursive_parent_id')
+        generator_type = request.form.get('generator_type', 'Fontana')
+        
+        current_pool = None
+        last_config_id = int(recursive_parent_id) if recursive_parent_id else None
+
+        # If starting from an existing parent, fetch its survivors once
+        if last_config_id:
+            from .db_utils import get_experiment_details, get_expressions_for_collision
+            parent_config, _, _ = get_experiment_details(last_config_id)
+            random_seed = parent_config[1]
+    
+            final_state = get_expressions_for_collision(last_config_id, -1)
+            if not final_state:
+                return jsonify({'status': 'error', 'message': f"Parent ID {last_config_id} has no collision data to inherit."}), 400
+
+            current_pool = []
+            for expr, count in sorted(final_state, key=lambda x: x[1], reverse=True)[:15]:
+                current_pool.extend([expr] * count)
+
+            generator_type = 'from_file'
+
+        # --- MULTI-GENERATION LOOP ---
+        for gen in range(num_generations):
+            gen_idx = gen + 1
+            exp_name = f"{base_name} [Gen {gen_idx}]" if num_generations > 1 else base_name
+            
+            config = {
+                'generator_type': generator_type,
+                'total_collisions': total_collisions,
+                'polling_frequency': polling_frequency,
+                'random_seed': random_seed,
+                'experiment_name': exp_name,
+                'expressions': current_pool
+            }
+
+            # Apply parameters for Gen 1 if it is a FRESH start
+            if gen == 0 and not recursive_parent_id:
+                if generator_type == 'from_file':
+                    if 'expressions_file' in request.files and request.files['expressions_file'].filename:
+                        file = request.files['expressions_file']
+                        filename = secure_filename(file.filename)
+                        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
+                        file.save(filepath)
+                        config['file_path'] = filepath
+                    elif request.form.get('direct_input'):
+                        config['expressions'] = [e.strip() for e in request.form.get('direct_input').split('\n') if e.strip()]
+                    
+                    if not config.get('expressions') and not config.get('file_path'):
+                        return jsonify({'status': 'error', 'message': "Selected 'From File' but provided no file or text."}), 400
+                        
+                elif generator_type == 'BTree':
+                    config.update({
+                        'size': int(request.form.get('btree_size', 5)),
+                        'freevar_probability': float(request.form.get('freevar_probability', 0.5)),
+                        'max_free_vars': int(request.form.get('max_free_vars', 3)),
+                        'standardization': request.form.get('standardization', 'prefix'),
+                        'num_expressions': int(request.form.get('num_expressions', 10))
+                    })
+                elif generator_type == 'Fontana':
+                    config.update({
+                        'abs_low': float(request.form.get('abs_low', 0.1)),
+                        'abs_high': float(request.form.get('abs_high', 0.5)),
+                        'app_low': float(request.form.get('app_low', 0.2)),
+                        'app_high': float(request.form.get('app_high', 0.6)),
+                        'min_depth': int(request.form.get('min_depth', 1)),
+                        'max_depth': int(request.form.get('max_depth', 5)),
+                        'max_free_vars': int(request.form.get('fontana_max_fv', 2)),
+                        'initial_expression_count': int(request.form.get('fontana_expression_count', 10)),
+                        'free_variable_probability': float(request.form.get('free_variable_probability', 0.5))
+                    })
+
+            # Fire Engine
+            result = run_experiment(config)
+
+            # Validate engine output
+            if not result or 'metrics' not in result:
+                raise ValueError(f"Simulation engine failed to return metrics for {exp_name}.")
+
+            # Save DB
+            new_id = save_configuration(
+                random_seed=random_seed, 
+                generator_type=generator_type,
+                total_collisions=total_collisions,
+                polling_frequency=polling_frequency,
+                probability_range=json.dumps(config.get('generator_params', {})),
+                name=exp_name
+            )
+
+            # Save population/metrics
+            initial_expressions = result.get('initial_expressions', [])
+            for expr, count in Counter(initial_expressions).items():
+                save_experiment_state(new_id, 0, expr, count)
+
+            metrics = result.get('metrics', [])
+            for metric in metrics:
+                save_averages(new_id, metric['collision_number'], metric['entropy'], metric['unique_expressions'])
+                if 'expressions' in metric:
+                    for expr, count in Counter(metric['expressions']).items():
+                        save_experiment_state(new_id, metric['collision_number'], expr, count)
+
+            # Link Lineage
+            if last_config_id:
+                save_continuation_metadata(new_id, last_config_id, 1.0, len(current_pool or initial_expressions), 0)
+
+            # SETUP FOR NEXT GENERATION IN THE LOOP
+            last_config_id = new_id
+            generator_type = 'from_file'
+            
+            # Extract survivors directly from memory for the next loop (Fast & Safe)
+            if metrics and 'expressions' in metrics[-1]:
+                survivors = Counter(metrics[-1]['expressions']).items()
+                current_pool = []
+                for expr, count in sorted(survivors, key=lambda x: x[1], reverse=True)[:15]:
+                    current_pool.extend([expr] * count)
+            else:
+                raise ValueError(f"{exp_name} produced no surviving expressions to pass on.")
+
+        return jsonify({
+            'status': 'success', 
+            'config_id': last_config_id, 
+            'experiment_name': exp_name,
+            'message': f"Successfully ran {num_generations} generation(s)."
+        })
+
+    except Exception as e:
+        print(f"Recursion Loop Error: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/trigger_invasive_species', methods=['POST'])
+def trigger_invasive_species():
+    try:
+        data = request.get_json()
+        parent_config_id = data.get('config_id')
+        invasive_expr = data.get('expression', '\\x.x')
+        invasive_count = int(data.get('count', 50))
+
         if not parent_config_id:
             return jsonify({'status': 'error', 'message': 'Missing config_id'}), 400
 
-        # fetch the final state
         final_state = get_expressions_for_collision(parent_config_id, -1)
         if not final_state:
             return jsonify({'status': 'error', 'message': 'No final data found.'}), 404
 
-        # sort population count from highest to lowest
-        sorted_population = sorted(final_state, key=lambda x: x[1], reverse=True)
-        
-        # remove the molecule with the highest count
-        apex_predator = sorted_population[0][0]
-        apex_count = sorted_population[0][1]
-        survivors = sorted_population[1:] 
-
-        # reconstruct survivor list for rust
         survivor_expressions = []
-        for expr, count in survivors:
-            survivor_expressions.extend([expr] * count) 
+        for expr, count in final_state:
+            survivor_expressions.extend([expr] * count)
 
-        if not survivor_expressions:
-            return jsonify({'status': 'error', 'message': 'No surivors left!'}), 400
+        # Inject the invasive molecules
+        survivor_expressions.extend([invasive_expr] * invasive_count)
 
-        # send to rust 
         config = {
             'generator_type': 'from_file', 
             'expressions': survivor_expressions,
             'total_collisions': 1000, 
             'polling_frequency': 10,
             'random_seed': 42,
-            'experiment_name': f"Post-Extinction (Parent: {parent_config_id})",
-            'continuation': {
-                'parent_config_id': parent_config_id,
-                'fraction': 1.0 
-            }
+            'experiment_name': f"Invasion: {invasive_expr[:20]} (Parent: {parent_config_id})"
         }
 
-        # run experiment with survivors
         result = run_experiment(config)
-        
-        # save new configuration 
-        new_config_id = save_configuration(
-            random_seed=config['random_seed'], 
-            generator_type='from_file', 
-            total_collisions=config['total_collisions'],
-            polling_frequency=config['polling_frequency'], 
-            probability_range=json.dumps({'input_mode': 'extinction_event', 'culled_species': apex_predator}),
+        new_id = save_configuration(
+            random_seed=42, generator_type='from_file', 
+            total_collisions=1000, polling_frequency=10, 
             name=config['experiment_name']
         )
 
-        # save initial state, metrics and record timeline
         for expr, count in Counter(survivor_expressions).items():
-            save_experiment_state(new_config_id, 0, expr, count)
+            save_experiment_state(new_id, 0, expr, count)
 
         metrics = result.get('metrics', [])
         for metric in metrics:
-            save_averages(new_config_id, metric['collision_number'], metric['entropy'], metric['unique_expressions'])
+            save_averages(new_id, metric['collision_number'], metric['entropy'], metric['unique_expressions'])
             if 'expressions' in metric:
                 for expr, count in Counter(metric['expressions']).items():
-                    save_experiment_state(new_config_id, metric['collision_number'], expr, count)
+                    save_experiment_state(new_id, metric['collision_number'], expr, count)
 
-        save_continuation_metadata(new_config_id, parent_config_id, 1.0, len(survivors), 0)
+        save_continuation_metadata(new_id, parent_config_id, 1.0, len(survivor_expressions) - invasive_count, invasive_count)
 
-        return jsonify({
-            'status': 'success', 
-            'new_config_id': new_config_id,
-            'message': f"The most abundant expression '{apex_predator[:15]}...' ({apex_count} copies) was eradicated. A new timeline has started"
-        })
-
+        return jsonify({'status': 'success', 'new_config_id': new_id})
     except Exception as e:
-        print(f"Extinction Error: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
+
 
 
 @app.route('/dashboard')

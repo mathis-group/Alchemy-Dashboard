@@ -208,11 +208,13 @@ def continuation_config(config_id):
 @app.route('/download_initial_state/<int:config_id>')
 def download_initial_state(config_id):
     try:
-        config, _, initial_expressions = get_experiment_details(config_id)
+        config, metrics, initial_expressions = get_experiment_details(config_id)
         if not config:
             return "Experiment not found", 404
 
         continuation = get_continuation_metadata(config_id)
+        
+        # Build the payload
         payload = {
             'config_id': config_id,
             'name': config[8] or f'Experiment {config_id}',
@@ -222,17 +224,26 @@ def download_initial_state(config_id):
             'polling_frequency': config[4],
             'timestamp': config[7],
             'continuation': continuation,
-            'initial_expression_counts': [{'expression': expr, 'count': count} for expr, count in initial_expressions]
+            'initial_expression_counts': [{'expression': expr, 'count': count} for expr, count in initial_expressions],
+            
+            # Graph data so it can be re-uploaded to the UI
+            'collisions_data': {
+                "experiment_history": {
+                    str(m[0]): {
+                        "entropy": m[1],
+                        "unique_expressions": m[2]
+                    } for m in metrics
+                }
+            }
         }
 
         if not payload['initial_expression_counts']:
-            return "No initial expressions recorded for this experiment", 404
+            return "No initial expressions recorded", 404
 
         buffer = io.BytesIO()
         buffer.write(json.dumps(payload, indent=2).encode('utf-8'))
         buffer.seek(0)
-        filename = f"experiment_{config_id}_initial_state.json"
-        return send_file(buffer, mimetype='application/json', as_attachment=True, download_name=filename)
+        return send_file(buffer, mimetype='application/json', as_attachment=True, download_name=f"experiment_{config_id}_initial_full.json")
     except Exception as exc:
         return jsonify({'status': 'error', 'message': str(exc)}), 500
 
@@ -245,23 +256,33 @@ def download_final_state(config_id):
 
         final_state = get_expressions_for_collision(config_id, -1)
         if not final_state:
-            return "No final state data available for this experiment", 404
+            return "No final state data available", 404
 
         last_collision = metrics[-1][0] if metrics else None
+        
+        # Build the payload
         payload = {
             'config_id': config_id,
             'name': config[8] or f'Experiment {config_id}',
             'generator_type': config[2],
             'timestamp': config[7],
             'last_collision_number': last_collision,
-            'final_state_counts': [{'expression': expr, 'count': count} for expr, count in final_state]
+            'final_state_counts': [{'expression': expr, 'count': count} for expr, count in final_state],
+            
+            'collisions_data': {
+                "experiment_history": {
+                    str(m[0]): {
+                        "entropy": m[1],
+                        "unique_expressions": m[2]
+                    } for m in metrics
+                }
+            }
         }
 
         buffer = io.BytesIO()
         buffer.write(json.dumps(payload, indent=2).encode('utf-8'))
         buffer.seek(0)
-        filename = f"experiment_{config_id}_final_state.json"
-        return send_file(buffer, mimetype='application/json', as_attachment=True, download_name=filename)
+        return send_file(buffer, mimetype='application/json', as_attachment=True, download_name=f"experiment_{config_id}_final_full.json")
     except Exception as exc:
         return jsonify({'status': 'error', 'message': str(exc)}), 500
 
@@ -289,6 +310,64 @@ def download_initial_expressions(config_id):
         return send_file(buffer, mimetype='text/plain', as_attachment=True, download_name=filename)
     except Exception as exc:
         return jsonify({'status': 'error', 'message': str(exc)}), 500
+
+@app.route('/upload_and_import', methods=['POST'])
+def upload_and_import():
+    try:
+        file = request.files.get('file')
+        if not file:
+            return jsonify({'status': 'error', 'message': 'No file received'}), 400
+        
+        data = json.load(file)
+        if 'collisions_data' not in data:
+            return jsonify({'status': 'error', 'message': 'Missing timeline data.'}), 400
+
+        # 1. Save Main Configuration
+        # Probability range needs to be a string for the DB
+        prob_range = json.dumps(data.get('generator_params', {}))
+        
+        new_config_id = save_configuration(
+            data.get('random_seed', 0),
+            data.get('generator_type', 'Imported'),
+            data.get('total_collisions', 1000),
+            data.get('polling_frequency', 10),
+            prob_range,
+            f"{data.get('name', 'Experiment')} (Imported)"
+        )
+
+        # 2. Re-hydrate Graphs (The Timeline)
+        # FIX: Using positional arguments to avoid 'new_id' naming errors
+        history = data['collisions_data'].get('experiment_history', {})
+        for col_num, metrics in history.items():
+            save_averages(
+                new_config_id, 
+                int(col_num), 
+                metrics['entropy'], 
+                metrics['unique_expressions']
+            )
+
+        # 3. Handle Molecular Population (AST & Histogram Fix)
+        final_pop = data.get('final_state_counts', [])
+        initial_pop = data.get('initial_expression_counts', [])
+        last_col = data.get('last_collision_number', -1)
+
+        # Map molecules to Collision 0 so the Sidebar/AST dropdown works
+        startup_data = initial_pop if initial_pop else final_pop
+        for item in startup_data:
+            save_experiment_state(new_config_id, 0, item['expression'], item['count'])
+
+        # Map molecules to Final State (-1) and the specific last collision (e.g., 990)
+        for item in final_pop:
+            save_experiment_state(new_config_id, -1, item['expression'], item['count'])
+            if last_col != -1:
+                save_experiment_state(new_config_id, last_col, item['expression'], item['count'])
+
+        return jsonify({'status': 'success', 'new_config_id': new_config_id})
+
+    except Exception as e:
+        print(f"Import Error: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
 
 @app.route('/delete_experiment', methods=['POST'])
 def delete_experiment_route():
@@ -871,6 +950,8 @@ def trigger_invasive_species():
         return jsonify({'status': 'success', 'new_config_id': new_id})
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
+
+
 
 @app.route('/dashboard')
 def dashboard():

@@ -653,35 +653,48 @@ def trigger_extinction():
 
         parent_data = get_experiment_details(parent_id)
         parent_config = parent_data[0]
+
         final_state = get_expressions_for_collision(parent_id, -1)
 
-        # 1. Filter survivors
+        # Identify survivors
         survivors = [item for item in final_state if item[0].strip() != target_expr]
         if not survivors:
             return jsonify({'status': 'error', 'message': 'Extinction wiped out everyone!'}), 400
 
-        # 2. Handle Pool Generation (Proportional Refill Logic)
+        # Calculate Original and Current Population
+        original_n = sum(count for _, count in final_state)
         survivor_pool = []
+        
         mode_label = "Refill" if should_refill else "Standard"
         
         if should_refill:
-            original_n = sum(count for _, count in final_state)
-            current_n = sum(count for _, count in survivors)
-            scale_factor = original_n / current_n
+            # add actual survivors to pool
             for expr, count in survivors:
-                scaled_count = int(round(count * scale_factor))
-                survivor_pool.extend([expr] * scaled_count)
+                survivor_pool.extend([expr] * count)
+            
+          
+            x_to_add = original_n - len(survivor_pool)
+            
+            # find top survivors by count to add extra copies of
+            top_performers = sorted(survivors, key=lambda x: x[1], reverse=True)
+            
+           
+            for i in range(x_to_add):
+           
+                boost_target = top_performers[i % len(top_performers)][0]
+                survivor_pool.append(boost_target)
         else:
+       
             for expr, count in survivors:
                 survivor_pool.extend([expr] * count)
 
         short_target = (target_expr[:12] + "..") if len(target_expr) > 12 else target_expr
         temp_name = f"Extinction ({mode_label}) - Removed: {short_target}"
 
-        # 3. Run forked experiment with Seed + 1
+        # run forked experiment with Seed + 1
         config = {
             'generator_type': 'from_file', 
-            'expressions': survivor_pool,
+            'expressions': survivor_pool, 
             'total_collisions': parent_config[3], 
             'polling_frequency': parent_config[4], 
             'random_seed': (parent_config[1] or 42) + 1,
@@ -689,7 +702,6 @@ def trigger_extinction():
         }
         result = run_experiment(config)
 
-        # 4. Save to Database
         new_id = save_configuration(
             config['random_seed'], 'from_file', config['total_collisions'],
             config['polling_frequency'], 
@@ -699,7 +711,6 @@ def trigger_extinction():
 
         update_experiment_name(new_id, f"Experiment #{new_id}: Extinction ({mode_label}) - Removed: {short_target}")
 
-        # Save results and link lineage
         for expr, count in Counter(survivor_pool).items():
             save_experiment_state(new_id, 0, expr, count)
 

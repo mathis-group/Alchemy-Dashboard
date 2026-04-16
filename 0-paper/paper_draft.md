@@ -126,7 +126,7 @@ Implementation Steps:
 - 2)remove all instances of the target expression from the soup
 - 3) Reconstructing the soup
     - If normal extinction: reconstruct soup with reamining survivors
-    - If refill: rank surviving expressions by frequency and adding extra copies to the most abundant species until the original population size is restored. Also increase seed by 1
+    - If refill: rank surviving expressions by frequency and adding extra copies to the most abundant species until the original population size is restored.
 - create a new simulation based off of the survivor pool
   
 

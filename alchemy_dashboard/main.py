@@ -205,86 +205,33 @@ def continuation_config(config_id):
     except Exception as exc:
         return jsonify({'status': 'error', 'message': str(exc)}), 500
 
-@app.route('/download_initial_state/<int:config_id>')
-def download_initial_state(config_id):
+@app.route('/download_current_expressions/<int:config_id>')
+def download_current_expressions(config_id):
+    """
+    This is the primary export for the "Soup" (expressions + counts).
+    """
     try:
-        config, metrics, initial_expressions = get_experiment_details(config_id)
-        if not config:
-            return "Experiment not found", 404
+        state_data = get_expressions_for_collision(config_id, -1)
+        if not state_data:
+            return "No data found", 404
 
-        continuation = get_continuation_metadata(config_id)
-        
-        # Build the payload
-        payload = {
-            'config_id': config_id,
-            'name': config[8] or f'Experiment {config_id}',
-            'generator_type': config[2],
-            'random_seed': config[1],
-            'total_collisions': config[3],
-            'polling_frequency': config[4],
-            'timestamp': config[7],
-            'continuation': continuation,
-            'initial_expression_counts': [{'expression': expr, 'count': count} for expr, count in initial_expressions],
-            
-            # Graph data so it can be re-uploaded to the UI
-            'collisions_data': {
-                "experiment_history": {
-                    str(m[0]): {
-                        "entropy": m[1],
-                        "unique_expressions": m[2]
-                    } for m in metrics
-                }
-            }
-        }
-
-        if not payload['initial_expression_counts']:
-            return "No initial expressions recorded", 404
+        # Flatten counts so [('x', 2)] becomes ['x', 'x']
+        expression_pool = []
+        for expr, count in state_data:
+            expression_pool.extend([expr] * count)
 
         buffer = io.BytesIO()
-        buffer.write(json.dumps(payload, indent=2).encode('utf-8'))
+        buffer.write(json.dumps(expression_pool, indent=2).encode('utf-8'))
         buffer.seek(0)
-        return send_file(buffer, mimetype='application/json', as_attachment=True, download_name=f"experiment_{config_id}_initial_full.json")
-    except Exception as exc:
-        return jsonify({'status': 'error', 'message': str(exc)}), 500
-
-@app.route('/download_final_state/<int:config_id>')
-def download_final_state(config_id):
-    try:
-        config, metrics, _ = get_experiment_details(config_id)
-        if not config:
-            return "Experiment not found", 404
-
-        final_state = get_expressions_for_collision(config_id, -1)
-        if not final_state:
-            return "No final state data available", 404
-
-        last_collision = metrics[-1][0] if metrics else None
         
-        # Build the payload
-        payload = {
-            'config_id': config_id,
-            'name': config[8] or f'Experiment {config_id}',
-            'generator_type': config[2],
-            'timestamp': config[7],
-            'last_collision_number': last_collision,
-            'final_state_counts': [{'expression': expr, 'count': count} for expr, count in final_state],
-            
-            'collisions_data': {
-                "experiment_history": {
-                    str(m[0]): {
-                        "entropy": m[1],
-                        "unique_expressions": m[2]
-                    } for m in metrics
-                }
-            }
-        }
-
-        buffer = io.BytesIO()
-        buffer.write(json.dumps(payload, indent=2).encode('utf-8'))
-        buffer.seek(0)
-        return send_file(buffer, mimetype='application/json', as_attachment=True, download_name=f"experiment_{config_id}_final_full.json")
-    except Exception as exc:
-        return jsonify({'status': 'error', 'message': str(exc)}), 500
+        return send_file(
+            buffer, 
+            mimetype='application/json', 
+            as_attachment=True, 
+            download_name=f"experiment_{config_id}_soup.json"
+        )
+    except Exception as e:
+        return str(e), 500
 
 @app.route('/download_initial_expressions/<int:config_id>')
 def download_initial_expressions(config_id):
@@ -822,14 +769,21 @@ def run_simulation_form():
                     if 'expressions_file' in request.files and request.files['expressions_file'].filename:
                         file = request.files['expressions_file']
                         filename = secure_filename(file.filename)
-                        filepath = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-                        file.save(filepath)
-                        config['file_path'] = filepath
+                        
+                        # FIX: Handle JSON soup files vs plain text files
+                        if filename.endswith('.json'):
+                            # Load our exported "Soup" list directly into the expressions list
+                            config['expressions'] = json.load(file)
+                        else:
+                            # Standard text file: read line by line
+                            content = file.read().decode('utf-8')
+                            config['expressions'] = [line.strip() for line in content.split('\n') if line.strip()]
+                    
                     elif request.form.get('direct_input'):
                         config['expressions'] = [e.strip() for e in request.form.get('direct_input').split('\n') if e.strip()]
                     
-                    if not config.get('expressions') and not config.get('file_path'):
-                        return jsonify({'status': 'error', 'message': "Selected 'From File' but provided no file or text."}), 400
+                    if not config.get('expressions'):
+                        return jsonify({'status': 'error', 'message': "No expressions provided. If uploading JSON, ensure it is a flat list."}), 400
                         
                 elif generator_type == 'BTree':
                     config.update({

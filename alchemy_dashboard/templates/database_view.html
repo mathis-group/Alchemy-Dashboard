@@ -119,16 +119,12 @@
                 </h3>
             </div>
             <div class="card-body">
-                <button id="download-final-state-btn" class="btn btn-outline-primary w-100 mb-2" type="button">
-                    <i class="fas fa-file-download me-2"></i> Download Final State
+                <button id="export-soup-btn" class="btn btn-outline-primary w-100 mb-2" type="button">
+                    <i class="fas fa-file-download me-2"></i> Download Current Soup JSON
                 </button>
-                <button id="download-initial-state-btn" class="btn btn-outline-secondary w-100" type="button"
-                        {% if not experiment.continuation %}style="display: none;" {% endif %}>
-                    <i class="fas fa-file-download me-2"></i> Download Initial State
-                </button>
-                <p class="text-muted small mt-2 mb-0 downloads-card-message"
-                   {% if experiment.continuation %}style="display: none;" {% endif %}>
-                    Initial state only available for continuation experiments.
+              
+                <p class="text-muted small mt-2 mb-0">
+                    Downloads the final population (expressions + counts) to re-upload into the simulation form.
                 </p>
             </div>
         </div>
@@ -151,9 +147,9 @@
                         <span>Display all</span>
                     </button>
                     {% if experiment.config_id > 0 %}
-                    <a id="download-expressions-link" class="expression-link" href="{{ url_for('download_initial_expressions', config_id=experiment.config_id) }}">
+                    <a id="download-expressions-link" class="expression-link" href="{{ url_for('download_current_expressions', config_id=experiment.config_id) }}">
                         <i class="fas fa-file-download"></i>
-                        <span>Download text</span>
+                        <span>Download JSON Soup</span>
                     </a>
                     {% endif %}
                 </div>
@@ -736,17 +732,16 @@ document.addEventListener("DOMContentLoaded", function() {
             updateDeleteButtonState();
         });
 
-    const finalDownloadButton = document.getElementById('download-final-state-btn');
-    if (finalDownloadButton && window.currentConfigID) {
-        finalDownloadButton.onclick = () => {
-            window.location.href = `/download_final_state/${window.currentConfigID}`;
-        };
-    }
-
-    const initialDownloadButton = document.getElementById('download-initial-state-btn');
-    if (initialDownloadButton && window.currentConfigID) {
-        initialDownloadButton.onclick = () => {
-            window.location.href = `/download_initial_state/${window.currentConfigID}`;
+   
+    const exportBtn = document.getElementById('export-soup-btn');
+    if (exportBtn) {
+        exportBtn.onclick = () => {
+            if (window.currentConfigID) {
+                // Match this to your actual Python route name
+                window.location.href = `/download_current_expressions/${window.currentConfigID}`;
+            } else {
+                alert("Select an experiment first.");
+            }
         };
     }
 

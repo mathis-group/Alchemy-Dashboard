@@ -115,16 +115,23 @@
             <div class="card-header">
                 <h3 class="card-title">
                     <i class="fas fa-download card-title-icon"></i>
-                    Downloads
+                    Export States
                 </h3>
             </div>
             <div class="card-body">
-                <button id="export-soup-btn" class="btn btn-outline-primary w-100 mb-2" type="button">
-                    <i class="fas fa-file-download me-2"></i> Download Current Soup JSON
-                </button>
-              
-                <p class="text-muted small mt-2 mb-0">
-                    Downloads the final population (expressions + counts) to re-upload into the simulation form.
+                <div class="d-grid gap-3">
+                    <a href="{{ url_for('download_initial_state', config_id=experiment.config_id) }}"
+                       class="btn btn-secondary">
+                        <i></i> Download Initial State JSON
+                    </a>
+
+                    <a href="{{ url_for('download_final_state', config_id=experiment.config_id) }}"
+                       class="btn btn-secondary">
+                        <i></i> Download Final Soup JSON
+                    </a>
+                </div>
+                <p class="text-muted small mt-3 mb-0">
+                    These JSON files contain metadata and molecular counts. You can re-upload either into the simulation form.
                 </p>
             </div>
         </div>

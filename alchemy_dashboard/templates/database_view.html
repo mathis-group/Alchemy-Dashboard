@@ -448,19 +448,22 @@ function switchDatabaseTab(tabName) {
 
         if (!dropdown || !configId) return;
 
-        fetch(`/get_experiment_metadata/${configId}`)
-            .then(res => res.json())
+        // api route for extinction
+        fetch(`/api/final_state/${configId}`)
+            .then(res => {
+                if (!res.ok) throw new Error("No final state");
+                return res.json();
+            })
             .then(data => {
-                if (data.status === "success" && data.expressions) {
-                    const counts = {};
-                    data.expressions.forEach(expr => { counts[expr] = (counts[expr] || 0) + 1; });
-                    const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 20);
+                if (data.status === 'success' && data.final_state_counts.length > 0) {
+                    // Sort by count descending and take top 20
+                    const sorted = data.final_state_counts.sort((a, b) => b.count - a.count).slice(0, 20);
 
                     dropdown.innerHTML = '<option value="" disabled selected>-- Select a molecule --</option>';
-                    sorted.forEach(([expr, count]) => {
+                    sorted.forEach(item => {
                         const opt = document.createElement('option');
-                        opt.value = expr;
-                        opt.textContent = `[Pop: ${count}] ${expr.substring(0, 45)}...`;
+                        opt.value = item.expression;
+                        opt.textContent = `[Pop: ${item.count}] ${item.expression.substring(0, 45)}...`;
                         dropdown.appendChild(opt);
                     });
 
@@ -471,6 +474,10 @@ function switchDatabaseTab(tabName) {
                         updateExtinctionPreview(dropdown.value);
                     };
                 }
+            })
+            .catch(err => {
+                console.log("Extinction dropdown error:", err);
+                dropdown.innerHTML = '<option value="" disabled selected>-- No survivors found --</option>';
             });
     }
 

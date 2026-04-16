@@ -691,13 +691,13 @@ def trigger_extinction():
         short_target = (target_expr[:12] + "..") if len(target_expr) > 12 else target_expr
         temp_name = f"Extinction ({mode_label}) - Removed: {short_target}"
 
-        # run forked experiment with Seed + 1
+        
         config = {
             'generator_type': 'from_file', 
             'expressions': survivor_pool, 
             'total_collisions': parent_config[3], 
             'polling_frequency': parent_config[4], 
-            'random_seed': (parent_config[1] or 42) + 1,
+            'random_seed': parent_config[1],
             'experiment_name': temp_name
         }
         result = run_experiment(config)
@@ -920,6 +920,10 @@ def trigger_invasive_species():
         if not parent_config_id:
             return jsonify({'status': 'error', 'message': 'Missing config_id'}), 400
 
+        #fetch parent data 
+        parent_data = get_experiment_details(parent_config_id)
+        parent_config = parent_data[0]
+
         final_state = get_expressions_for_collision(parent_config_id, -1)
         if not final_state:
             return jsonify({'status': 'error', 'message': 'No final data found.'}), 404
@@ -936,13 +940,13 @@ def trigger_invasive_species():
             'expressions': survivor_expressions,
             'total_collisions': 1000, 
             'polling_frequency': 10,
-            'random_seed': 42,
+            'random_seed': parent_config[1],
             'experiment_name': f"Invasion: {invasive_expr[:20]} (Parent: {parent_config_id})"
         }
 
         result = run_experiment(config)
         new_id = save_configuration(
-            random_seed=42, generator_type='from_file', 
+            random_seed=parent_config[1], generator_type='from_file', 
             total_collisions=1000, polling_frequency=10, 
             name=config['experiment_name']
         )
@@ -962,6 +966,19 @@ def trigger_invasive_species():
         return jsonify({'status': 'success', 'new_config_id': new_id})
     except Exception as e:
         return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/api/final_state/<int:config_id>')
+def api_final_state(config_id):
+    try:
+        final_state = get_expressions_for_collision(config_id, -1)
+        if not final_state:
+            return jsonify({'status': 'error', 'message': 'No final state found'}), 404
+        return jsonify({
+            'status': 'success',
+            'final_state_counts': [{'expression': expr, 'count': count} for expr, count in final_state]
+        })
+    except Exception as exc:
+        return jsonify({'status': 'error', 'message': str(exc)}), 500
 
 
 

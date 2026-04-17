@@ -49,53 +49,44 @@ def get_experiment_configs(db_path=DB_NAME):
         conn.close()
 
 # Update get_experiment_details to include the name field
-def get_experiment_details(config_id, db_path=DB_NAME):
-    """Get detailed information about a specific experiment."""
-    conn = sqlite3.connect(db_path)
+def get_experiment_details(config_id):
+    """Get complete experiment details including metrics and initial expressions."""
+    conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-
-    # Get configuration details
-    cursor.execute("""
-        SELECT 
-            config_id, 
-            random_seed,
-            generator_type, 
-            total_collisions, 
-            polling_frequency, 
-            probability_range,
-            freevar_generation_probability,
-            timestamp,
-            name
-        FROM Configurations 
-        WHERE config_id = ?
-    """, (config_id,))
+    
+    # Get configuration
+    cursor.execute('''
+        SELECT config_id, random_seed, generator_type, total_collisions, 
+               polling_frequency, probability_range, freevar_generation_probability, 
+               timestamp, name
+        FROM Configurations WHERE config_id = ?
+    ''', (config_id,))
     config = cursor.fetchone()
     
     if not config:
         conn.close()
-        return None, None, None
-
-    # Get the initial expressions (collision 0)
-    cursor.execute("""
-        SELECT expression, count
-        FROM Experiment
-        WHERE config_id = ? AND collision_number = 0
-    """, (config_id,))
-    initial_expressions = cursor.fetchall()
-
-    # Get metrics data for all collisions
-    cursor.execute("""
-        SELECT 
-            collision_number, 
-            entropy, 
-            unique_expressions
+        return None, [], []
+    
+    # Get metrics
+    cursor.execute('''
+        SELECT collision_number, entropy, unique_expressions
         FROM Averages
         WHERE config_id = ?
         ORDER BY collision_number
-    """, (config_id,))
+    ''', (config_id,))
     metrics = cursor.fetchall()
-
+    
+    # Get initial expressions (collision 0)
+    cursor.execute('''
+        SELECT expression, count
+        FROM Experiment
+        WHERE config_id = ? AND collision_number = 0
+        ORDER BY count DESC
+    ''', (config_id,))
+    initial_expressions = cursor.fetchall()
+    
     conn.close()
+    
     return config, metrics, initial_expressions
 
 import pandas as pd

@@ -40,7 +40,7 @@
                 <p class="feature-description">Configure and run alchemy experiments directly from the dashboard.</p>
             </div>
         </a>
-        
+
         <a href="/multi_compare" style="text-decoration: none; color: inherit;">
             <div class="feature-card fade-in delay-4">
                 <div class="feature-icon"><i class="fas fa-chart-line"></i></div>
@@ -50,6 +50,40 @@
         </a>
     </div>
 </div>
+
+<!-- Hidden import form for home page -->
+<form id="home-import-form" action="/upload_and_import" method="POST" enctype="multipart/form-data" style="display: none;">
+    <input type="file" id="import-json-input" name="file" accept=".json">
+</form>
+
+<script>
+    document.getElementById('import-json-input').addEventListener('change', function () {
+        if (this.files.length > 0) {
+            const formData = new FormData();
+            formData.append('file', this.files[0]);
+
+            alert('Importing experiment... This may take a moment.');
+
+            fetch('/upload_and_import', {
+                method: 'POST',
+                body: formData
+            })
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        window.location.href = `/database?config_id=${data.new_config_id}`;
+                    } else {
+                        alert('Import failed: ' + data.message);
+                    }
+                })
+                .catch(err => {
+                    alert('Import error: ' + err.message);
+                });
+
+            this.value = '';
+        }
+    });
+</script>
 {% endblock %}
 
 {% block scripts %}

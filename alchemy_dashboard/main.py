@@ -7,6 +7,8 @@ from flask import Flask, render_template, request, redirect, url_for, jsonify, s
 from bokeh.resources import CDN
 from bokeh.embed import components, json_item
 from werkzeug.utils import secure_filename
+import sqlite3
+from .config import DB_NAME
 
 from .simulation import run_experiment
 from .plotting import get_simulation_components, plot_experiment_metrics, ASTvisualizer, ASTErr, create_bokeh_plots_from_metrics
@@ -53,6 +55,7 @@ def database_view():
     """View database contents and experiment details."""
     configs = get_experiment_configs()
     mode = request.args.get('tree_mode', 'ward')
+    requested_id = request.args.get('config_id', type=int)
     
     if not configs:
         default_experiment = {
@@ -64,8 +67,18 @@ def database_view():
                                initial_expressions=[], bokeh_script='', bokeh_div='',
                                active_page='database', mode=mode)
     
-    latest_config = configs[0]
-    config, metrics, initial_expressions = get_experiment_details(latest_config['config_id'])
+    if requested_id is not None:
+        config, metrics, initial_expressions = get_experiment_details(requested_id)
+        if not config:
+            # Invalid ID - fall back to latest
+            config, metrics, initial_expressions = get_experiment_details(configs[0]['config_id'])
+            selected_config_id = configs[0]['config_id']
+        else:
+            selected_config_id = requested_id
+    else:
+        # No ID provided - use latest
+        config, metrics, initial_expressions = get_experiment_details(configs[0]['config_id'])
+        selected_config_id = configs[0]['config_id']
     
     if not config:
         return "Experiment not found", 404
@@ -94,7 +107,7 @@ def database_view():
     lineage_script, lineage_div = "", ""
     try:
         from .lineage_plots import create_dendrogram
-        l_script, l_div = create_dendrogram(latest_config['config_id'], mode=mode)
+        l_script, l_div = create_dendrogram(selected_config_id, mode=mode)
         lineage_script = re.sub(r'<script[^>]*>', '', l_script).replace("</script>", "")
         lineage_div = l_div
     except Exception as e:
@@ -209,7 +222,8 @@ def continuation_config(config_id):
 def download_initial_state(config_id):
     try:
         config, _, initial_expressions = get_experiment_details(config_id)
-        if not config: return "Experiment not found", 404
+        if not config: 
+            return "Experiment not found", 404
 
         continuation = get_continuation_metadata(config_id)
         payload = {
@@ -227,33 +241,65 @@ def download_initial_state(config_id):
         buffer = io.BytesIO()
         buffer.write(json.dumps(payload, indent=2).encode('utf-8'))
         buffer.seek(0)
-        return send_file(buffer, mimetype='application/json', as_attachment=True, download_name=f"experiment_{config_id}_initial_state.json")
+        return send_file(buffer, mimetype='application/json', as_attachment=True, 
+                        download_name=f"experiment_{config_id}_initial_state.json")
     except Exception as exc:
         return jsonify({'status': 'error', 'message': str(exc)}), 500
+
 
 @app.route('/download_final_state/<int:config_id>')
 def download_final_state(config_id):
     try:
-        config, metrics, _ = get_experiment_details(config_id)
-        if not config: return "Experiment not found", 404
+        config, metrics, initial_expressions = get_experiment_details(config_id)
+        if not config: 
+            return "Experiment not found", 404
 
         final_state = get_expressions_for_collision(config_id, -1)
-        if not final_state: return "No data found", 404
+        if not final_state: 
+            return "No data found", 404
 
         last_collision = metrics[-1][0] if metrics else None
+        
+        # Get expression state at every sampled collision
+        sampled_collisions = {}
+        for metric in metrics:
+            col_num = metric[0]
+            expr_data = get_expressions_for_collision(config_id, col_num)
+            sampled_collisions[str(col_num)] = [
+                {'expression': expr, 'count': count} for expr, count in expr_data
+            ]
+        
         payload = {
             'config_id': config_id,
             'name': config[8] or f'Experiment {config_id}',
             'generator_type': config[2],
+            'random_seed': config[1],
+            'total_collisions': config[3],
+            'polling_frequency': config[4],
             'timestamp': config[7],
             'last_collision_number': last_collision,
-            'final_state_counts': [{'expression': expr, 'count': count} for expr, count in final_state]
+            'final_state_counts': [{'expression': expr, 'count': count} for expr, count in final_state],
+            'initial_expression_counts': [{'expression': expr, 'count': count} for expr, count in initial_expressions],
+            
+            # Graph data for home page import
+            'collisions_data': {
+                "experiment_history": {
+                    str(m[0]): {
+                        "entropy": m[1],
+                        "unique_expressions": m[2]
+                    } for m in metrics
+                }
+            },
+            
+            # Add sampled collisions for distance analysis
+            'sampled_collisions': sampled_collisions
         }
 
         buffer = io.BytesIO()
         buffer.write(json.dumps(payload, indent=2).encode('utf-8'))
         buffer.seek(0)
-        return send_file(buffer, mimetype='application/json', as_attachment=True, download_name=f"experiment_{config_id}_final_state.json")
+        return send_file(buffer, mimetype='application/json', as_attachment=True, 
+                        download_name=f"experiment_{config_id}_final_state.json")
     except Exception as exc:
         return jsonify({'status': 'error', 'message': str(exc)}), 500
 
@@ -318,12 +364,10 @@ def upload_and_import():
             return jsonify({'status': 'error', 'message': 'No file received'}), 400
         
         data = json.load(file)
-        if 'collisions_data' not in data:
-            return jsonify({'status': 'error', 'message': 'Missing timeline data.'}), 400
-
+        
         # 1. Save Main Configuration
-        # Probability range needs to be a string for the DB
         prob_range = json.dumps(data.get('generator_params', {}))
+        original_name = data.get('name', 'Imported Experiment')
         
         new_config_id = save_configuration(
             data.get('random_seed', 0),
@@ -331,42 +375,56 @@ def upload_and_import():
             data.get('total_collisions', 1000),
             data.get('polling_frequency', 10),
             prob_range,
-            f"{data.get('name', 'Experiment')} (Imported)"
+            f"{original_name} (Imported)"
         )
 
-        # 2. Re-hydrate Graphs (The Timeline)
-        # FIX: Using positional arguments to avoid 'new_id' naming errors
-        history = data['collisions_data'].get('experiment_history', {})
-        for col_num, metrics in history.items():
-            save_averages(
-                new_config_id, 
-                int(col_num), 
-                metrics['entropy'], 
-                metrics['unique_expressions']
-            )
+        # 2. Restore Averages (entropy & unique_expressions)
+        if 'collisions_data' in data:
+            history = data['collisions_data'].get('experiment_history', {})
+            for col_num, metrics in history.items():
+                save_averages(
+                    new_config_id, 
+                    int(col_num), 
+                    metrics['entropy'], 
+                    metrics['unique_expressions']
+                )
 
-        # 3. Handle Molecular Population (AST & Histogram Fix)
+        # 3. Handle Molecular Population 
         final_pop = data.get('final_state_counts', [])
         initial_pop = data.get('initial_expression_counts', [])
         last_col = data.get('last_collision_number', -1)
 
-        # Map molecules to Collision 0 so the Sidebar/AST dropdown works
+        # Save initial state (collision 0)
         startup_data = initial_pop if initial_pop else final_pop
         for item in startup_data:
             save_experiment_state(new_config_id, 0, item['expression'], item['count'])
 
-        # Map molecules to Final State (-1) and the specific last collision (e.g., 990)
+        # Save final state (collision -1) and last collision
         for item in final_pop:
             save_experiment_state(new_config_id, -1, item['expression'], item['count'])
             if last_col != -1:
                 save_experiment_state(new_config_id, last_col, item['expression'], item['count'])
 
-        return jsonify({'status': 'success', 'new_config_id': new_config_id})
+        # Also restore expression state at every sampled collision if available
+        if 'sampled_collisions' in data:
+            for col_num, expressions in data['sampled_collisions'].items():
+                for item in expressions:
+                    save_experiment_state(new_config_id, int(col_num), item['expression'], item['count'])
+
+        # Store original name in generator_params for display
+        cursor = sqlite3.connect(DB_NAME).cursor()
+        cursor.execute(
+            "UPDATE Configurations SET probability_range = ? WHERE config_id = ?",
+            (json.dumps({'original_name': original_name, 'imported': True}), new_config_id)
+        )
+        cursor.connection.commit()
+        cursor.connection.close()
+
+        return jsonify({'status': 'success', 'new_config_id': new_config_id, 'original_name': original_name})
 
     except Exception as e:
         print(f"Import Error: {e}")
         return jsonify({'status': 'error', 'message': str(e)}), 500
-
 
 @app.route('/delete_experiment', methods=['POST'])
 def delete_experiment_route():
@@ -818,41 +876,51 @@ def run_simulation_form():
             # Apply parameters for Gen 1 if it is a FRESH start
             if gen == 0 and not recursive_parent_id:
                 if generator_type == 'from_file':
+                    # Check for uploaded file
                     if 'expressions_file' in request.files and request.files['expressions_file'].filename:
                         file = request.files['expressions_file']
                         filename = secure_filename(file.filename)
                         
                         if filename.endswith('.json'):
-                            data = json.load(file)
+                            file_content = file.read().decode('utf-8')
+                            data = json.loads(file_content)
+                            config['expressions'] = []
                             
-                            # Check if it's the dictionary format (Initial State)
-                            if isinstance(data, dict) and 'initial_expression_counts' in data:
-                                config['expressions'] = []
-                                for item in data['initial_expression_counts']:
-                                    config['expressions'].extend([item['expression']] * item['count'])
-                                    
-                            # Check if it's the dictionary format (Final State)
-                            elif isinstance(data, dict) and 'final_state_counts' in data:
-                                config['expressions'] = []
-                                for item in data['final_state_counts']:
-                                    config['expressions'].extend([item['expression']] * item['count'])
+                            if isinstance(data, dict):
+                                # PRIORITY 1: Final state counts
+                                if 'final_state_counts' in data:
+                                    for item in data['final_state_counts']:
+                                        config['expressions'].extend([item['expression']] * item['count'])
+                                    print(f"Loaded {len(config['expressions'])} expressions from FINAL STATE")
+                                
+                                # PRIORITY 2: Initial state counts
+                                elif 'initial_expression_counts' in data:
+                                    for item in data['initial_expression_counts']:
+                                        config['expressions'].extend([item['expression']] * item['count'])
+                                    print(f"Loaded {len(config['expressions'])} expressions from INITIAL STATE")
+                                
+                                else:
+                                    return jsonify({'status': 'error', 'message': 'JSON missing expression counts. Use Final State or Initial State JSON.'}), 400
                             
-                            # Fallback: Check if it's the "Soup" format (flat list)
                             elif isinstance(data, list):
                                 config['expressions'] = data
+                                print(f"Loaded {len(config['expressions'])} expressions from flat list")
                             
                             else:
-                                return jsonify({'status': 'error', 'message': "JSON format not recognized."}), 400
+                                return jsonify({'status': 'error', 'message': 'JSON format not recognized'}), 400
+                        
                         else:
-                            # Standard text file: read line by line
+                            # Text file: read line by line
                             content = file.read().decode('utf-8')
                             config['expressions'] = [line.strip() for line in content.split('\n') if line.strip()]
                     
+                    # Check for direct input
                     elif request.form.get('direct_input'):
                         config['expressions'] = [e.strip() for e in request.form.get('direct_input').split('\n') if e.strip()]
                     
+                    # Validate we have expressions
                     if not config.get('expressions'):
-                        return jsonify({'status': 'error', 'message': "No expressions provided. If uploading JSON, ensure it is a flat list."}), 400
+                        return jsonify({'status': 'error', 'message': 'No expressions provided.'}), 400
                         
                 elif generator_type == 'BTree':
                     config.update({
@@ -912,7 +980,7 @@ def run_simulation_form():
             last_config_id = new_id
             generator_type = 'from_file'
             
-            # Extract survivors directly from memory for the next loop (Fast & Safe)
+            # Extract survivors directly from memory for the next loop
             if metrics and 'expressions' in metrics[-1]:
                 survivors = Counter(metrics[-1]['expressions']).items()
                 current_pool = []

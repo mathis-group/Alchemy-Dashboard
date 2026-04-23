@@ -14,7 +14,7 @@ dependencies = [
     "pandas>=2.1",
     "sqlalchemy>=2.0",
     "werkzeug>=3.0",
-    "alchemy @ git+https://github.com/mathis-group/Modern-AlChemy.git@main",
+    "alchemy @ git+https://github.com/mathis-group/Modern-AlChemy.git@Record-Reactions",
     "scipy>=1.15.3",
     "scikit-learn>=1.7.2",
     "matplotlib>=3.10.8",
@@ -24,6 +24,6 @@ dependencies = [
 package = true
 
 [tool.uv.sources]
-alchemy = { git = "https://github.com/mathis-group/Modern-AlChemy.git", branch = "main" }
+alchemy = { git = "https://github.com/mathis-group/Modern-AlChemy.git", branch = "Record-Reactions" }
 
 [tool.setuptools.packages.find]

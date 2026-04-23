@@ -1610,3 +1610,31 @@
 #delete-all-experiments-btn {
     margin-top: 0.5rem !important;
 }
+
+
+/* Better spacing between labels and inputs in simulation form */
+#fresh-form .form-label,
+#recursive-form .form-label {
+    margin-bottom: 0.5rem !important;
+}
+
+/* Ensure consistent spacing for all form fields */
+#fresh-form .mb-3,
+#fresh-form .row.mb-3,
+#fresh-form .form-group,
+#recursive-form .mb-3,
+#recursive-form .form-group {
+    margin-bottom: 1.25rem !important;
+}
+
+#fontana-options .form-label,
+#btree-options .form-label,
+#from-file-options .form-label {
+    margin-bottom: 0.35rem !important;
+}
+
+#fontana-options .form-control,
+#btree-options .form-control,
+#from-file-options .form-control {
+    margin-top: 0 !important;
+}

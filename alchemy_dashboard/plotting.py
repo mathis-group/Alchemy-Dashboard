@@ -483,14 +483,9 @@ def get_simulation_components(results_path: str):
     script, div = components(column(layout))
     return script, div
 
-
-
 #=== Plot AST Tree ====
-
 def ASTvisualizer(expression):
     try:
-        """plotly equivalent:
-             Graph.Tree(nr_vertices, 2)"""
         #use lambda parser to translate expres
         parser = LambdaParser(expression)
         Atree = parser.parse()
@@ -581,103 +576,6 @@ def ASTvisualizer(expression):
         
     except Exception as e:
         return ASTErr(f"Error: {str(e)}")
-
-    #     """ plotly equivalent: {}, Xe = [], Ye = [], Xn = [], Yn = [] """
-    #     nodes = []
-        
-    #     def position(node, x, y):
-    #         """plotly equivalent: 
-    #             lay = G.layout('rt'), position = {k: lay[k] for k in range(nr_vertices)}"""
-            
-    #         # color for node type
-    #         if isinstance(node, VariableNode):
-    #             nodeColor = colors.get(node.name, "yellow")
-    #         elif isinstance(node, LambdaNode):
-    #             nodeColor = colors.get(node.var, "green")  
-    #             #application node
-    #         else: 
-    #             nodeColor = "red"
-            
-    #         """plotly equivalent:
-    #          position[k] = (x, y), v_label[k] = label """
-    #         nodes.append({
-    #             #store node info
-    #             'x': x, 'y': y, 'name': node.name,
-    #             'color': nodeColor,
-    #             'children': getattr(node, 'children', [])
-    #         })
-    #         if len('children')==0:
-    #                 return
-            
-    #         """plotly equivalent:
-    #         lay = G.layout('rt') 
-    #         position = {k: lay[k] for k in range(nr_vertices)}"""
-    #         for i, child in enumerate(getattr(node, 'children', [])):
-    #             position(child,
-    #                      x + (i * 2) - 1, #horizontal position
-    #                      y - 2) # vertical position
-        
-    #     #place first ancestor
-    #     position(Atree, 0, 0)
-        
-    #     """plotly equivalent: 
-    #         fig = go.Figure() """
-    #     p = create_styled_figure(
-    #         f"AST: {expression}", 
-    #         "", "", 
-    #         width=800, height=450
-    #     )
-        
-        
-    #     """ plotly equivalent: 
-    #        for edge in E:
-    #           Xe += [position[edge[0]][0], position[edge[1]][0], None]
-    #           Ye += [2*M-position[edge[0]][1], 2*M-position[edge[1]][1], None] """
-        
-    #     #draw lines
-    #     for node in nodes:
-    #         for i, child in enumerate(node['children']):
-    #             childX = node['x'] + (i * 2) - 1
-    #             childY = node['y'] - 2
-    #             """ plotly equivalent: 
-    #                 fig.add_trace(go.Scatter(x=Xe, y=Ye, mode='lines')) """
-    #             p.line([node['x'], childX], [node['y'], childY], line_width=3, color='#000000', line_alpha=0.6)
-        
-    #     """ plotly equivalent:  
-    #         Xn = [position[k][0] for k in range(L)]
-    #         Yn = [2*M-position[k][1] for k in range(L)] """
-    #     nodeXn = [k['x'] for k in nodes]
-    #     nodeYn = [k['y'] for k in nodes] 
-    #     nodeNames = [k['name'] for k in nodes]
-    #     nodeColors = [k['color'] for k in nodes]
-        
-    #     """ plotly equivalent: Adding node trace
-    #          fig.add_trace(go.Scatter(x=Xn, y=Yn, mode='markers')) """
-    #     p.scatter(nodeXn, nodeYn, size=25, color=nodeColors, line_color=TEXT_COLOR, line_width=1, alpha=0.8)
-        
-    #     """plotly equivalent:
-    #        def make_annotations(pos, text):
-    #            return [dict(text=text[k], x=pos[k][0], y=2*M-pos[k][1]) for k in range(L)]
-    #        fig.update_layout(annotations=make_annotations(position, v_label))"""
-    #     make_annotations = ColumnDataSource(data={'x': nodeXn, 'y': nodeYn, 'text': nodeNames})
-    #     annotations= LabelSet(  x='x', y='y', text='text', source=make_annotations,
-    #         text_color='white', text_align='center', text_baseline='middle',
-    #         text_font_style='bold', text_font_size='12px')
-    #     p.add_layout(annotations)
-        
-    #     """ plotly equivalent: 
-    #        axis = dict(showline=False, showgrid=False, showticklabels=False)
-    #        fig.update_layout(xaxis=axis, yaxis=axis, plot_bgcolor='rgb(248,248,248)')"""
-    #     p.background_fill_color = "#FFFFFF"
-    #     p.border_fill_color = "#FFFFFF"
-
-    #     """ plotly equivalent:  fig.show() or return fig"""
-    #     return p
-        
-    # except Exception as e:
-    #     return ASTErr(f"Error: {str(e)}")
-    
-
 
 def ASTErr(message):
    

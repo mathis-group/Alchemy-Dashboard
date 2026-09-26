@@ -12,6 +12,9 @@ import numpy as np
 from scipy.spatial.distance import pdist, squareform
 import matplotlib.pyplot as plt
 from sklearn.manifold import MDS
+# New imports for non-overlapping AST
+import networkx as nx
+from collections import defaultdict
 
 # Define colors using CSS variables
 PRIMARY_COLOR = "#4F46E5"  # var(--primary)
@@ -498,101 +501,181 @@ def ASTvisualizer(expression):
         
         #get variable colors
         colors = getColors(Atree)
-        
-        """ plotly equivalent: {}, Xe = [], Ye = [], Xn = [], Yn = [] """
-        nodes = []
-        
-        def position(node, x, y):
-            """plotly equivalent: 
-                lay = G.layout('rt'), position = {k: lay[k] for k in range(nr_vertices)}"""
-            
-            # color for node type
+
+        # Build NetworkX DiGraph
+        G = nx.DiGraph()
+
+        def build_graph(node, depth=0):
+            node_id = len(G) # Guarantees unique ID based on current length
+
             if isinstance(node, VariableNode):
-                nodeColor = colors.get(node.name, "yellow")
+                node_color = colors.get(node.name, "yellow")
             elif isinstance(node, LambdaNode):
-                nodeColor = colors.get(node.var, "green")  
-                #application node
-            else: 
-                nodeColor = "red"
-            
-            """plotly equivalent:
-             position[k] = (x, y), v_label[k] = label """
-            nodes.append({
-                #store node info
-                'x': x, 'y': y, 'name': node.name,
-                'color': nodeColor,
-                'children': getattr(node, 'children', [])
-            })
-            if len('children')==0:
-                    return
-            
-            """plotly equivalent:
-            lay = G.layout('rt') 
-            position = {k: lay[k] for k in range(nr_vertices)}"""
-            for i, child in enumerate(getattr(node, 'children', [])):
-                position(child,
-                         x + (i * 2) - 1, #horizontal position
-                         y - 2) # vertical position
-        
-        #place first ancestor
-        position(Atree, 0, 0)
-        
-        """plotly equivalent: 
-            fig = go.Figure() """
+                node_color = colors.get(node.var, "green")
+            else:
+                node_color = "red"
+
+            # Add current node
+            node_name = getattr(node, 'name', None) or getattr(node, 'var', None) or str(node)
+            G.add_node(node_id, name=str(node_name), color=node_color, depth=depth)
+
+            # Recurse over children
+            children = getattr(node, 'children', [])
+            for child in children:
+                child_id = build_graph(child, depth=depth + 1)
+                G.add_edge(node_id, child_id)
+
+            return node_id
+
+        build_graph(Atree)
+
+        # Calculate coordinates based on depth level, preventing overlap
+        levels = defaultdict(list)
+        for n, data in G.nodes(data=True):
+            levels[data['depth']].append(n) # Add nodes to each level
+
+        pos = {}
+        y_spacing = 2.0
+        x_spacing = 2.0
+
+        for depth, nodes_in_level in levels.items():
+            total_nodes = len(nodes_in_level)
+            for idx, node_id in enumerate(nodes_in_level):
+                x = (idx - (total_nodes - 1) / 2.0) * x_spacing
+                y = -depth * y_spacing
+                pos[node_id] = (x, y)
+
+        # Bokeh figure
         p = create_styled_figure(
-            f"AST: {expression}", 
-            "", "", 
-            width=800, height=500
+            f"AST: {expression}", "", "",
+            width=800, height=450
         )
-        
-        
-        """ plotly equivalent: 
-           for edge in E:
-              Xe += [position[edge[0]][0], position[edge[1]][0], None]
-              Ye += [2*M-position[edge[0]][1], 2*M-position[edge[1]][1], None] """
-        
-        #draw lines
-        for node in nodes:
-            for i, child in enumerate(node['children']):
-                childX = node['x'] + (i * 2) - 1
-                childY = node['y'] - 2
-                """ plotly equivalent: 
-                    fig.add_trace(go.Scatter(x=Xe, y=Ye, mode='lines')) """
-                p.line([node['x'], childX], [node['y'], childY], line_width=3, color='#000000', line_alpha=0.6)
-        
-        """ plotly equivalent:  
-            Xn = [position[k][0] for k in range(L)]
-            Yn = [2*M-position[k][1] for k in range(L)] """
-        nodeXn = [k['x'] for k in nodes]
-        nodeYn = [k['y'] for k in nodes] 
-        nodeNames = [k['name'] for k in nodes]
-        nodeColors = [k['color'] for k in nodes]
-        
-        """ plotly equivalent: Adding node trace
-             fig.add_trace(go.Scatter(x=Xn, y=Yn, mode='markers')) """
+
+        # Draw Edges
+        for u, v in G.edges():
+            x_start, y_start = pos[u]
+            x_end, y_end = pos[v]
+            p.line([x_start, x_end], [y_start, y_end], line_width=2, color='#000000', line_alpha=0.6)
+
+        # Extract node coordinates from DiGraph
+        nodeXn = [pos[n][0] for n in G.nodes()]
+        nodeYn = [pos[n][1] for n in G.nodes()]
+        nodeNames = [G.nodes[n]['name'] for n in G.nodes()]
+        nodeColors = [G.nodes[n]['color'] for n in G.nodes()]
+
+        # Plot
         p.scatter(nodeXn, nodeYn, size=25, color=nodeColors, line_color=TEXT_COLOR, line_width=1, alpha=0.8)
-        
-        """plotly equivalent:
-           def make_annotations(pos, text):
-               return [dict(text=text[k], x=pos[k][0], y=2*M-pos[k][1]) for k in range(L)]
-           fig.update_layout(annotations=make_annotations(position, v_label))"""
+
         make_annotations = ColumnDataSource(data={'x': nodeXn, 'y': nodeYn, 'text': nodeNames})
-        annotations= LabelSet(  x='x', y='y', text='text', source=make_annotations,
+        annotations = LabelSet(
+            x='x', y='y', text='text', source=make_annotations,
             text_color='white', text_align='center', text_baseline='middle',
-            text_font_style='bold', text_font_size='12px')
+            text_font_style='bold', text_font_size='11px'
+        )
         p.add_layout(annotations)
-        
-        """ plotly equivalent: 
-           axis = dict(showline=False, showgrid=False, showticklabels=False)
-           fig.update_layout(xaxis=axis, yaxis=axis, plot_bgcolor='rgb(248,248,248)')"""
+
         p.background_fill_color = "#FFFFFF"
         p.border_fill_color = "#FFFFFF"
 
-        """ plotly equivalent:  fig.show() or return fig"""
         return p
         
     except Exception as e:
         return ASTErr(f"Error: {str(e)}")
+
+    #     """ plotly equivalent: {}, Xe = [], Ye = [], Xn = [], Yn = [] """
+    #     nodes = []
+        
+    #     def position(node, x, y):
+    #         """plotly equivalent: 
+    #             lay = G.layout('rt'), position = {k: lay[k] for k in range(nr_vertices)}"""
+            
+    #         # color for node type
+    #         if isinstance(node, VariableNode):
+    #             nodeColor = colors.get(node.name, "yellow")
+    #         elif isinstance(node, LambdaNode):
+    #             nodeColor = colors.get(node.var, "green")  
+    #             #application node
+    #         else: 
+    #             nodeColor = "red"
+            
+    #         """plotly equivalent:
+    #          position[k] = (x, y), v_label[k] = label """
+    #         nodes.append({
+    #             #store node info
+    #             'x': x, 'y': y, 'name': node.name,
+    #             'color': nodeColor,
+    #             'children': getattr(node, 'children', [])
+    #         })
+    #         if len('children')==0:
+    #                 return
+            
+    #         """plotly equivalent:
+    #         lay = G.layout('rt') 
+    #         position = {k: lay[k] for k in range(nr_vertices)}"""
+    #         for i, child in enumerate(getattr(node, 'children', [])):
+    #             position(child,
+    #                      x + (i * 2) - 1, #horizontal position
+    #                      y - 2) # vertical position
+        
+    #     #place first ancestor
+    #     position(Atree, 0, 0)
+        
+    #     """plotly equivalent: 
+    #         fig = go.Figure() """
+    #     p = create_styled_figure(
+    #         f"AST: {expression}", 
+    #         "", "", 
+    #         width=800, height=450
+    #     )
+        
+        
+    #     """ plotly equivalent: 
+    #        for edge in E:
+    #           Xe += [position[edge[0]][0], position[edge[1]][0], None]
+    #           Ye += [2*M-position[edge[0]][1], 2*M-position[edge[1]][1], None] """
+        
+    #     #draw lines
+    #     for node in nodes:
+    #         for i, child in enumerate(node['children']):
+    #             childX = node['x'] + (i * 2) - 1
+    #             childY = node['y'] - 2
+    #             """ plotly equivalent: 
+    #                 fig.add_trace(go.Scatter(x=Xe, y=Ye, mode='lines')) """
+    #             p.line([node['x'], childX], [node['y'], childY], line_width=3, color='#000000', line_alpha=0.6)
+        
+    #     """ plotly equivalent:  
+    #         Xn = [position[k][0] for k in range(L)]
+    #         Yn = [2*M-position[k][1] for k in range(L)] """
+    #     nodeXn = [k['x'] for k in nodes]
+    #     nodeYn = [k['y'] for k in nodes] 
+    #     nodeNames = [k['name'] for k in nodes]
+    #     nodeColors = [k['color'] for k in nodes]
+        
+    #     """ plotly equivalent: Adding node trace
+    #          fig.add_trace(go.Scatter(x=Xn, y=Yn, mode='markers')) """
+    #     p.scatter(nodeXn, nodeYn, size=25, color=nodeColors, line_color=TEXT_COLOR, line_width=1, alpha=0.8)
+        
+    #     """plotly equivalent:
+    #        def make_annotations(pos, text):
+    #            return [dict(text=text[k], x=pos[k][0], y=2*M-pos[k][1]) for k in range(L)]
+    #        fig.update_layout(annotations=make_annotations(position, v_label))"""
+    #     make_annotations = ColumnDataSource(data={'x': nodeXn, 'y': nodeYn, 'text': nodeNames})
+    #     annotations= LabelSet(  x='x', y='y', text='text', source=make_annotations,
+    #         text_color='white', text_align='center', text_baseline='middle',
+    #         text_font_style='bold', text_font_size='12px')
+    #     p.add_layout(annotations)
+        
+    #     """ plotly equivalent: 
+    #        axis = dict(showline=False, showgrid=False, showticklabels=False)
+    #        fig.update_layout(xaxis=axis, yaxis=axis, plot_bgcolor='rgb(248,248,248)')"""
+    #     p.background_fill_color = "#FFFFFF"
+    #     p.border_fill_color = "#FFFFFF"
+
+    #     """ plotly equivalent:  fig.show() or return fig"""
+    #     return p
+        
+    # except Exception as e:
+    #     return ASTErr(f"Error: {str(e)}")
     
 
 

@@ -1,3 +1,28 @@
+"""
+Dendrogram (tree) plots that show how an experiment's population changes and
+how its expressions relate to each other.
+
+A dendrogram groups similar things together: items that join low in the tree
+are very similar, items that only join near the top are very different.
+
+Two modes are used throughout:
+    "ward"  Compares whole populations (how many copies of each expression
+            there are). Uses Ward's method, which groups populations so that
+            each group stays as uniform as possible.
+    "edit"  Compares expressions by their text, using Levenshtein (edit)
+            distance: the number of single-character changes needed to turn
+            one expression into another.
+
+Functions:
+    create_dendrogram                   One experiment. Used by main.py
+                                        (/database and /get_lineage_analysis).
+    create_multi_experiment_dendrogram  Several experiments. Not currently used;
+                                        main.py uses the version in plotting.py.
+
+Both return Bokeh (script, div) components. Leaves are placed at
+x = 5, 15, 25, ... because that is where scipy's dendrogram() puts them.
+"""
+
 import numpy as np
 import pandas as pd
 import Levenshtein
@@ -10,22 +35,45 @@ from bokeh.embed import components
 from .db_utils import get_comparison_data
 
 def create_dendrogram(config_id, mode='ward'):
+    """Build a dendrogram for one experiment.
+
+    Uses the experiment's 100 most common expressions (from
+    db_utils.get_comparison_data).
+
+    Args:
+        config_id (int): The experiment.
+        mode (str): "ward" or "edit" (any value other than "ward" is
+            treated as "edit").
+            "ward": each leaf is a saved collision (snapshot in time).
+                Snapshots whose populations look alike are grouped together,
+                so you can see phases in the experiment's history. At most
+                about 40 snapshots are used. Hovering shows the most common
+                expression at that snapshot.
+            "edit": each leaf is an expression. Expressions with similar text
+                are grouped together. Hovering shows the expression.
+
+    Returns:
+        tuple: (script, div) Bokeh components, or (None, None) if the
+            experiment has no saved data.
+    """
     df = get_comparison_data(config_id, most=100)
     if df.empty: return None, None
 
-    # pivot data
+    # pivot data into a table: one row per collision, one column per
+    # expression, each cell = how many copies existed (0 if none)
     matrix = df.pivot_table(index="collision_number", columns="expression", 
                             values="count", aggfunc='sum').fillna(0)
     
     if mode == 'ward':
-        # ward distance logic
+        # ward distance logic.
+        # Keep every Nth row so there are at most ~40 leaves (keeps it readable)
         snapshot_rate = max(1, len(matrix) // 40)
         matrix = matrix.iloc[::snapshot_rate]
         
         Z = linkage(matrix.values, method='ward')
         labels = matrix.index.astype(str).tolist()
-        # hover functionality
-        hover_data = matrix.idxmax(axis=1).tolist() 
+        # hover functionality: the most common expression in each snapshot
+        hover_data = matrix.idxmax(axis=1).tolist()
         hover_label = "Dominant Molecule"
         title = "Ward Distance"
     else:
@@ -38,17 +86,25 @@ def create_dendrogram(config_id, mode='ward'):
             metric=lambda x, y: Levenshtein.distance(str(x[0]), str(y[0]))
         )
         
-        # edit distance drawing
+        # edit distance drawing. squareform() converts the square distance
+        # table into the condensed form linkage() expects.
         Z = linkage(squareform(dist_matrix), method='average')
         labels = unique_molecules
         hover_data = unique_molecules 
         hover_label = "Molecule Structure"
         title = "Edit Distance"
 
-    # drawing the dendrograms
+    # drawing the dendrograms. no_plot=True: scipy only calculates the
+    # layout, and Bokeh does the drawing below.
     ddata = dendrogram(Z, no_plot=True)
-    
-    # branch coordinates
+
+    # scipy reorders the leaves so branches don't cross; put the labels and
+    # hover text in that same order so each one sits under the right branch
+    leaves = ddata['leaves']
+    labels = [labels[i] for i in leaves]
+    hover_data = [hover_data[i] for i in leaves]
+
+    # branch coordinates (icoord = x values, dcoord = heights of each branch)
     source = ColumnDataSource(data={'xs': ddata['icoord'], 'ys': ddata['dcoord']})
 
     # leaf coordiantes
@@ -65,7 +121,8 @@ def create_dendrogram(config_id, mode='ward'):
     # branches
     p.multi_line('xs', 'ys', source=source, color="#4F46E5", line_width=2, alpha=0.6)
 
-    # hover function
+    # hover function: invisible circles on each leaf that turn red when the
+    # mouse is over them and show the tooltip
     leaf_renderer = p.circle('x', 'y', source=leaf_source, size=15, 
                              fill_alpha=0, line_alpha=0, hover_fill_alpha=0.3, hover_fill_color="red")
 
@@ -77,8 +134,10 @@ def create_dendrogram(config_id, mode='ward'):
 
     p.xaxis.ticker = [i*10 + 5 for i in range(len(labels))]
 
+    # Edit mode hides the x-axis labels because lambda expressions are too
+    # long to fit; ward mode labels each leaf with its collision number.
     if mode == 'edit':
-       
+
         p.xaxis.major_label_text_color = None
         p.xaxis.major_tick_line_color = None
         p.xaxis.minor_tick_line_color = None
@@ -91,6 +150,29 @@ def create_dendrogram(config_id, mode='ward'):
 
 #create dendrogram for multiple experiments and compare
 def create_multi_experiment_dendrogram(config_ids, mode='ward'):
+    """Build one dendrogram comparing several experiments.
+
+    Not currently used: main.py calls plotting.create_multi_experiment_dendrogram
+    instead, which works like the "edit" mode here but colors leaves by
+    experiment.
+
+    Args:
+        config_ids (list[int]): Experiments to compare.
+        mode (str):
+            "ward": each leaf is a whole experiment, compared by its final
+                population. Experiments that ended up with similar
+                populations are grouped together.
+            "edit": each leaf is an expression, taken from the 50 most common
+                expressions of every experiment and pooled together.
+                Expressions with similar text are grouped together.
+
+    Returns:
+        tuple: (script, div) Bokeh components. Returns None if mode is
+            neither "ward" nor "edit".
+
+    Raises:
+        ValueError: if none of the experiments have data to compare.
+    """
     from scipy.cluster.hierarchy import linkage, dendrogram
     import pandas as pd
     import numpy as np
@@ -120,6 +202,8 @@ def create_multi_experiment_dendrogram(config_ids, mode='ward'):
         if not final_states:
             raise ValueError("No valid final state data found.")
 
+        # Build a table: one row per experiment, one column per expression
+        # seen in any experiment, each cell = its count (0 if absent)
         records = []
         for label in experiment_labels:
             if label not in final_states: continue
@@ -158,7 +242,7 @@ def create_multi_experiment_dendrogram(config_ids, mode='ward'):
 
         all_unique_expressions = set()
         
-        # Top 50 survivors from very experiment
+        # Top 50 survivors from every experiment (shared expressions only appear once)
         for cid in config_ids:
             df = get_comparison_data(cid, most=50) 
             if not df.empty:

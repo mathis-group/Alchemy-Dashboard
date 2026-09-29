@@ -18,7 +18,8 @@ dependencies = [
     "scipy>=1.15.3",
     "scikit-learn>=1.7.2",
     "matplotlib>=3.10.8",
-    "Levenshtein>=0.25.0"
+    "Levenshtein>=0.25.0",
+    "networkx>=3.4.2",
 ]
 [tool.uv]
 package = true

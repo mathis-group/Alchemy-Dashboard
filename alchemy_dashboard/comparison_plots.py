@@ -1,4 +1,22 @@
 #alchemy comparison_plots.py
+"""
+Stability plots: how much an experiment's population changes over time.
+
+Each saved snapshot is compared with the snapshot just before it, using two
+similarity scores from ecology (both range from 0 to 1, where 1 = no change):
+
+    Jaccard      Only looks at WHICH expressions are present.
+                 = (expressions in both snapshots) / (expressions in either).
+                 Drops when expressions appear or disappear.
+    Bray-Curtis  Also looks at HOW MANY copies of each expression there are.
+                 = 1 - sum(|count difference|) / sum(both counts).
+                 Drops when the counts shift, even if the same expressions
+                 are present.
+
+main.py imports calculate_distance() as `run_ordination` for the
+/get_distance_analysis route. Despite the names, it plots similarity between
+consecutive snapshots; it does not do an ordination (MDS) plot.
+"""
 import pandas as pd
 import numpy as np
 import sqlite3
@@ -16,28 +34,46 @@ from bokeh.models import BasicTicker, ColorBar, LinearColorMapper
 
 
 def calculate_distance(config_id):
+    """Plot Jaccard and Bray-Curtis similarity between consecutive snapshots.
+
+    Only the experiment's 100 most common expressions are included (from
+    db_utils.get_comparison_data), and at most about 120 snapshots are used.
+
+    Args:
+        config_id (int): The experiment.
+
+    Returns:
+        tuple: (script, div) Bokeh components for two side-by-side line
+            plots that share the same x-axis (zooming one zooms both).
+            (None, None) if the experiment has no saved data.
+    """
     df = get_comparison_data(config_id, most=100)
     if df.empty: return None, None
 
-    #ccreate matrix
+    #create matrix: one row per collision, one column per expression,
+    # each cell = how many copies existed (0 if none)
     matrix = df.pivot_table(index="collision_number", 
                             columns="expression", 
                             values="count", aggfunc='sum').fillna(0)
     
-    # fix points
+    # fix points: keep every Nth snapshot so there are at most ~120.
+    # Note that this means "previous snapshot" below may be several saved
+    # snapshots back for long experiments.
     snapshot_rate = max(1, len(matrix) // 120) 
     matrix = matrix.iloc[::snapshot_rate]
     
     collisions = matrix.index.tolist()
     counts = matrix.values
-    #yes / no count
+    #yes / no count: 1 if the expression is present at all, 0 if not (for Jaccard)
     binary = (counts > 0).astype(int)
     
     jaccard_indices = []
     bray_indices = []
     time_points = []
 
-    #compare snapshot to previous one 
+    #compare snapshot to previous one. The first snapshot has nothing to
+    # compare with, so the plot starts at the second one.
+    # If both snapshots are empty, the score is set to 0.
     for i in range(1, len(matrix)):
         #calculate jaccard index
         intersection = np.logical_and(binary[i-1], binary[i]).sum()
@@ -74,6 +110,8 @@ def calculate_distance(config_id):
     p2.line('x', 'bray', source=source, line_width=2, color="#10B981", legend_label="Bray-Curtis")
 
     
+    # One hover tool shared by both plots; "Stability" is the y value
+    # under the mouse
     hover = HoverTool(tooltips=[("Collision", "@x"), ("Stability", "$y{0.000}")])
     p1.add_tools(hover)
     p2.add_tools(hover)

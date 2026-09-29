@@ -1558,11 +1558,9 @@ def trigger_invasive_species():
                 drop = set(rng.sample(range(len(survivor_expressions)), removed_count))
                 survivor_expressions = [e for i, e in enumerate(survivor_expressions) if i not in drop]
 
-
         # Inject the invasive molecules
         survivor_expressions.extend([invasive_expr] * invasive_count)
 
-        ## invasive molecules do not change
         config = {
             "generator_type": "from_file",
             "expressions": survivor_expressions,

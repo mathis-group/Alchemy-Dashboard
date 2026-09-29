@@ -431,7 +431,11 @@
                     </div>
 
                     <button class="btn btn-warning w-100 fw-bold" id="invasive-tab-btn" onclick="triggerInvasionFromTab()">
-                        <i></i> Inject Species
+                        <i></i> Inject Species Only
+                    </button>
+
+                    <button class="btn btn-warning w-100 fw-bold" id="invasive-tab-btn" onclick="triggerInvasionFromTab(proportional_delete = true)">
+                        <i></i> Inject Species + Proportional Deletion
                     </button>
                 </div>
             </div>
@@ -1263,8 +1267,10 @@ document.getElementById('tree_mode_dropdown').addEventListener('change', functio
     }
 });
 
+    // invasive species injection function stuff
+    // TODO: Jubilee add option to delete to keep popuation consistent
     // Invasive species function for tab button
-    function triggerInvasionFromTab() {
+    function triggerInvasionFromTab(proportional_delete = false) {
         if (!window.currentConfigID) {
             alert('No experiment selected.');
             return;
@@ -1288,7 +1294,7 @@ document.getElementById('tree_mode_dropdown').addEventListener('change', functio
             return;
         }
 
-        if (!confirm(`Inject ${count} copies of "${expr}" and fork a new timeline?`)) {
+        if (!confirm(`Inject ${count} copies of "${expr}"${proportional_delete ? `, remove ${count} expressions, ` : ''} and fork a new timeline?`)) {
             return;
         }
 
@@ -1303,13 +1309,14 @@ document.getElementById('tree_mode_dropdown').addEventListener('change', functio
             body: JSON.stringify({
                 config_id: window.currentConfigID,
                 expression: expr,
-                count: count
+                count: count,
+                proportional_delete: proportional_delete
             })
         })
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
-                    alert(`Invasive species injected! ${count} copies of "${expr}" added. New timeline created.`);
+                    alert(`Invasive species injected! ${count} copies of "${expr}" added. ${proportional_delete ? ` ${data.removed_count} expressions were removed to keep the population size constant.` : ''} New timeline created.`);
                     window.location.href = `/database?config_id=${data.new_config_id}`;
                 } else {
                     alert("Error: " + (data.message || 'Unknown error'));

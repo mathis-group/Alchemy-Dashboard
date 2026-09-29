@@ -39,6 +39,8 @@ Route overview:
 import os
 import json
 import io
+from random import random
+import random
 import re
 from collections import Counter
 from flask import Flask, render_template, request, redirect, url_for, jsonify, send_file
@@ -1530,6 +1532,7 @@ def trigger_invasive_species():
         parent_config_id = data.get("config_id")
         invasive_expr = data.get("expression", "\\x.x")
         invasive_count = int(data.get("count", 50))
+        proportional_delete = data.get('proportional_delete', False)
 
         if not parent_config_id:
             return jsonify({"status": "error", "message": "Missing config_id"}), 400
@@ -1546,16 +1549,27 @@ def trigger_invasive_species():
         for expr, count in final_state:
             survivor_expressions.extend([expr] * count)
 
+        # Remove a proportion of the existing population if flag is passed in true
+        removed_count = 0
+        if proportional_delete:
+            removed_count = min(invasive_count, len(survivor_expressions))
+            if removed_count > 0:
+                rng = random.Random(parent_config[1])
+                drop = set(rng.sample(range(len(survivor_expressions)), removed_count))
+                survivor_expressions = [e for i, e in enumerate(survivor_expressions) if i not in drop]
+
+
         # Inject the invasive molecules
         survivor_expressions.extend([invasive_expr] * invasive_count)
 
+        ## invasive molecules do not change
         config = {
             "generator_type": "from_file",
             "expressions": survivor_expressions,
             "total_collisions": 1000,
             "polling_frequency": 10,
             "random_seed": parent_config[1],
-            "experiment_name": f"Invasion: {invasive_expr[:20]} (Parent: {parent_config_id})",
+            "experiment_name": f"Invasion{' (Proportional Delete)' if proportional_delete else ' (No Delete)'}: {invasive_expr[:20]} (Parent: {parent_config_id})",
         }
 
         result = run_experiment(config)
@@ -1592,7 +1606,7 @@ def trigger_invasive_species():
             invasive_count,
         )
 
-        return jsonify({"status": "success", "new_config_id": new_id})
+        return jsonify({'status': 'success', 'new_config_id': new_id, 'removed_count': removed_count})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 

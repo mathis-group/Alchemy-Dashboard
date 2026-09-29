@@ -1,4 +1,23 @@
 # alchemy_dashboard/models.py
+"""
+Database layer for the Alchemy Dashboard.
+
+Creates the SQLite tables and provides small helper functions to save, read,
+rename, and delete experiments. Every function opens its own connection to
+DB_NAME (from config.py) and closes it before returning.
+
+Tables (created by init_database):
+    Configurations        One row per experiment: its settings and name.
+    Experiment            The population: how many copies of each expression
+                          existed at a given collision. Collision 0 is the
+                          initial population. (db_utils.get_expressions_for_collision
+                          treats -1 as "the latest recorded collision".)
+    Averages              Summary metrics (entropy, number of unique
+                          expressions) recorded at each sampled collision.
+    ContinuationMetadata  Links an experiment to the parent experiment it was
+                          started from (multi-generation runs, extinction,
+                          invasive species).
+"""
 
 import sqlite3
 import json
@@ -9,11 +28,16 @@ from .config import DB_NAME
 from sqlalchemy import Column, Integer, Float, String, ForeignKey, DateTime, create_engine
 
 def init_database():
-    """Initialize the database and create tables if they don't exist."""
+    """Initialize the database and create tables if they don't exist.
+
+    Safe to call every time the app starts: existing tables and data are kept,
+    and columns added in later versions are added to older databases.
+    """
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    
-    # Create Configurations table
+
+    # Create Configurations table (one row per experiment).
+    # probability_range holds the generator parameters as a JSON string.
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS Configurations (
         config_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -38,7 +62,8 @@ def init_database():
     except Exception as e:
         print(f"Error adding name column: {e}")
     
-    # Create Experiment table
+    # Create Experiment table: one row per (experiment, collision, expression)
+    # with how many copies of that expression were in the population
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS Experiment (
         experiment_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -50,7 +75,7 @@ def init_database():
     )
     ''')
     
-    # Create Averages table
+    # Create Averages table: entropy and unique-expression count per sampled collision
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS Averages (
         average_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -62,7 +87,8 @@ def init_database():
     )
     ''')
 
-    # Track recursive experiments / continuations
+    # Track recursive experiments / continuations.
+    # Each child experiment has at most one parent (child_config_id is the key).
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS ContinuationMetadata (
         child_config_id INTEGER PRIMARY KEY,
@@ -85,8 +111,6 @@ def init_database():
     conn.commit()
     conn.close()
     
-# Update the save_configuration function to accept a name parameter
-
 def save_configuration(random_seed, generator_type, total_collisions, polling_frequency, 
                       probability_range=None, freevar_generation_probability=None, name=None):
     """
@@ -99,8 +123,9 @@ def save_configuration(random_seed, generator_type, total_collisions, polling_fr
         polling_frequency (int): Frequency at which data is collected
         probability_range (str): JSON representation of probability ranges
         freevar_generation_probability (float): Probability of generating free variables
-        name (str): User-specified name for the experiment (optional)
-    
+        name (str): User-specified name for the experiment (optional).
+            If omitted, the experiment is named "Experiment <id>".
+
     Returns:
         int: The ID of the newly created configuration
     """
@@ -141,7 +166,6 @@ def save_configuration(random_seed, generator_type, total_collisions, polling_fr
     return config_id
 
 
-# Add a function to update experiment name
 def update_experiment_name(config_id, new_name):
     """
     Update the name of an existing experiment.
@@ -151,11 +175,12 @@ def update_experiment_name(config_id, new_name):
         new_name (str): New name for the experiment
         
     Returns:
-        bool: True if successful, False otherwise
+        bool: True if successful, False otherwise (including when no
+            experiment has that ID)
     """
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    
+
     try:
         cursor.execute('''
         UPDATE Configurations
@@ -176,10 +201,14 @@ def update_experiment_name(config_id, new_name):
 def save_experiment_state(config_id, collision_number, expression, count):
     """
     Save experiment state to the database.
-    
+
+    Stores how many copies of one expression were in the population at one
+    collision. Call it once per distinct expression.
+
     Args:
         config_id (int): ID of the configuration
         collision_number (int): Current collision number
+            (0 = initial population)
         expression (str): The lambda expression
         count (int): Count/frequency of this expression
     
@@ -209,11 +238,15 @@ def save_experiment_state(config_id, collision_number, expression, count):
 def save_averages(config_id, collision_number, entropy, unique_expressions):
     """
     Save averages/metrics to the database.
-    
+
+    Called once per sampled collision; these rows are what the entropy and
+    unique-expression plots are drawn from.
+
     Args:
         config_id (int): ID of the configuration
         collision_number (int): Collision number
-        entropy (float): Entropy value
+        entropy (float): Entropy value (how evenly spread the population is
+            across different expressions)
         unique_expressions (int): Count of unique expressions
     """
     conn = sqlite3.connect(DB_NAME)
@@ -235,7 +268,21 @@ def save_averages(config_id, collision_number, entropy, unique_expressions):
 
 
 def save_continuation_metadata(child_config_id, parent_config_id, fraction_used, reused_expression_count, additional_expression_count):
-    """Record metadata for a continuation experiment."""
+    """Record metadata for a continuation experiment.
+
+    Links a child experiment to the parent it was started from. If the child
+    already has a record, it is replaced.
+
+    Args:
+        child_config_id (int): The new experiment.
+        parent_config_id (int): The experiment it continued from.
+        fraction_used (float): Fraction of the parent's population carried
+            over (0.0 to 1.0).
+        reused_expression_count (int): Number of expressions taken from the
+            parent.
+        additional_expression_count (int): Number of new expressions added
+            on top (e.g. invasive species copies).
+    """
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
 
@@ -256,7 +303,16 @@ def save_continuation_metadata(child_config_id, parent_config_id, fraction_used,
 
 
 def get_continuation_metadata(child_config_id):
-    """Fetch continuation metadata for a given experiment."""
+    """Fetch continuation metadata for a given experiment.
+
+    Args:
+        child_config_id (int): The experiment to look up.
+
+    Returns:
+        dict or None: Keys parent_config_id, fraction_used,
+        reused_expression_count, additional_expression_count, created_at.
+        None if the experiment was not continued from another one.
+    """
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
 
@@ -282,7 +338,11 @@ def get_continuation_metadata(child_config_id):
 
 
 def get_last_config_id():
-    """Get the ID of the most recently added configuration."""
+    """Get the ID of the most recently added configuration.
+
+    Returns:
+        int: The highest config_id, or 1 if the table is empty.
+    """
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     
@@ -293,7 +353,13 @@ def get_last_config_id():
     return last_id if last_id else 1  # Default to 1 if no configurations exist
 
 def get_experiment_configs():
-    """Get all experiment configurations."""
+    """Get all experiment configurations.
+
+    Returns:
+        list[dict]: One dict per experiment, newest first. Keys: config_id,
+        random_seed, generator_type, total_collisions, polling_frequency,
+        timestamp, probability_range, freevar_generation_probability, name.
+    """
     conn = sqlite3.connect(DB_NAME)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
@@ -310,7 +376,16 @@ def get_experiment_configs():
     return configs
 
 def get_experiment_data(config_id):
-    """Get experiment data for a specific configuration."""
+    """Get experiment data for a specific configuration.
+
+    Args:
+        config_id (int): The experiment to look up.
+
+    Returns:
+        dict: {"config": <all Configurations columns as a dict>,
+               "averages": [{"collision_number", "entropy",
+                             "unique_expressions"}, ...] in collision order}
+    """
     conn = sqlite3.connect(DB_NAME)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
@@ -338,7 +413,17 @@ def get_experiment_data(config_id):
     }
 
 def get_experiment_expressions(config_id, collision_number):
-    """Get expressions for a specific configuration and collision number."""
+    """Get expressions for a specific configuration and collision number.
+
+    Args:
+        config_id (int): The experiment.
+        collision_number (int): Which collision (0 = initial). Unlike
+            db_utils.get_expressions_for_collision, -1 is not treated as
+            "latest" here; it only matches rows actually saved as -1.
+
+    Returns:
+        list[dict]: [{"expression", "count"}, ...], most common first.
+    """
     conn = sqlite3.connect(DB_NAME)
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
@@ -357,7 +442,18 @@ def get_experiment_expressions(config_id, collision_number):
 
 
 def delete_experiment(config_id):
-    """Remove an experiment and all associated records from the database."""
+    """Remove an experiment and all associated records from the database.
+
+    Also removes lineage links where this experiment is the parent, so its
+    child experiments are kept but no longer show where they came from.
+
+    Args:
+        config_id (int): The experiment to delete.
+
+    Returns:
+        bool: True if deleted, False if an error occurred (nothing is
+        deleted in that case).
+    """
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
 
@@ -377,7 +473,11 @@ def delete_experiment(config_id):
 
 
 def reset_database_counters():
-    """Wipes the SQLite memory of old IDs so the next experiment starts at 1."""
+    """Wipes the SQLite memory of old IDs so the next experiment starts at 1.
+
+    Only makes sense after every experiment has been deleted; otherwise new
+    IDs could collide with existing ones.
+    """
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     
@@ -392,13 +492,13 @@ def reset_database_counters():
         conn.close()
 
 
-# If not already present:
+# --- SQLAlchemy session (not used by the functions above) ---
+# Note: this connects to "alchemy_experiments.db" relative to the folder the
+# app is started from, which may not be the same file as DB_NAME.
 from sqlalchemy.orm import sessionmaker
 
-# This should already exist:
 engine = create_engine("sqlite:///alchemy_experiments.db", echo=False)
 
-# Add this:
 Session = sessionmaker(bind=engine)
 db_session = Session()
 

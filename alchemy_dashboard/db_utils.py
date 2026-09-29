@@ -1,4 +1,19 @@
 # alchemy_dashboard/db_utils.py
+"""
+Read-side database helpers for the Alchemy Dashboard.
+
+These functions read experiments, populations and metrics out of the SQLite
+database (models.py creates the tables and does most of the saving).
+
+Tables used (see models.init_database for the full schema):
+    Configurations  One row per experiment: its settings and name.
+    Experiment      Population snapshots: (config_id, collision_number,
+                    expression, count). Collision 0 is the initial population.
+    Averages        Metrics per sampled collision: entropy, unique_expressions.
+
+Most functions return raw rows as tuples rather than dicts, so check each
+docstring for the order of the values.
+"""
 
 import os
 from re import ASCII
@@ -7,7 +22,8 @@ import json
 from typing import Counter
 import pandas as pd
 
-# Get the absolute path to the database
+# Get the absolute path to the database.
+# This is the same path as config.DB_NAME; if one changes, change the other.
 DB_NAME = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', 'alchemy_experiments.db'))
 
 
@@ -17,9 +33,18 @@ def check_database_exists(db_path=DB_NAME):
 
 
 
-# Update get_experiment_configs function to include the name field
 def get_experiment_configs(db_path=DB_NAME):
-    """Fetch all experiment configurations from the database."""
+    """Fetch all experiment configurations from the database.
+
+    Note: main.py uses models.get_experiment_configs (which returns dicts),
+    not this version.
+
+    Returns:
+        list[tuple]: Newest first. Each tuple is
+            (config_id, random_seed, generator_type, total_collisions,
+             polling_frequency, timestamp, name).
+            Empty list if the database doesn't exist or the query fails.
+    """
     if not check_database_exists(db_path):
         return []
 
@@ -48,9 +73,26 @@ def get_experiment_configs(db_path=DB_NAME):
     finally:
         conn.close()
 
-# Update get_experiment_details to include the name field
 def get_experiment_details(config_id):
-    """Get complete experiment details including metrics and initial expressions."""
+    """Get complete experiment details including metrics and initial expressions.
+
+    Args:
+        config_id (int): The experiment to look up.
+
+    Returns:
+        tuple: (config, metrics, initial_expressions)
+            config: tuple of
+                [0] config_id          [1] random_seed        [2] generator_type
+                [3] total_collisions   [4] polling_frequency
+                [5] probability_range (JSON string)
+                [6] freevar_generation_probability
+                [7] timestamp          [8] name
+            metrics: list of (collision_number, entropy, unique_expressions),
+                in collision order
+            initial_expressions: list of (expression, count) at collision 0,
+                most common first
+        If the experiment doesn't exist, returns (None, [], []).
+    """
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     
@@ -94,6 +136,9 @@ import pandas as pd
 def query_df_by_config_id(config_id):
     """
     Query Averages table for a config_id and return pandas DataFrame.
+
+    Columns: collision_num, entropy, len_unique_expressions.
+    (plotting.py has its own copy of this function with the same behavior.)
     """
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
@@ -113,7 +158,17 @@ def query_df_by_config_id(config_id):
 
 
 def process_collision_data(metrics):
-    """Process collision metrics data into a DataFrame for plotting."""
+    """Process collision metrics data into a DataFrame for plotting.
+
+    Args:
+        metrics (list): Either (collision_number, entropy, unique_expressions)
+            tuples, as returned by get_experiment_details(), or dicts with
+            those same keys.
+
+    Returns:
+        pandas.DataFrame: Columns collision_number, entropy,
+            unique_expressions_count (the format plot_experiment_metrics expects).
+    """
     print(f"[DEBUG] process_collision_data called with {len(metrics)} metrics")
     if metrics:
         print(f"[DEBUG] First metric: {metrics[0]}")
@@ -149,6 +204,19 @@ def get_expressions_for_collision(config_id, collision_number, db_path=DB_NAME):
     """
     Get all expressions for a specific collision.
     If collision_number is -1, returns the last collision.
+
+    "Last" means the highest collision number saved for this experiment, which
+    is the final population. Other collision numbers must match a saved
+    snapshot exactly (only every polling_frequency-th collision is saved).
+
+    Args:
+        config_id (int): The experiment.
+        collision_number (int): Collision to fetch, or -1 for the latest.
+        db_path (str): Database file; defaults to DB_NAME.
+
+    Returns:
+        list[tuple]: (expression, count) pairs, most common first.
+            Empty list if nothing was saved for that collision.
     """
     conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
@@ -186,10 +254,15 @@ def get_experiment_metrics(config_ids, metric_name, db_path=DB_NAME):
     
     Args:
         config_ids (list): List of configuration IDs to compare
-        metric_name (str): Name of the metric to retrieve ('entropy' or 'unique_expressions')
-        
+        metric_name (str): Name of the metric to retrieve ('entropy' or 'unique_expressions').
+            This is a column name that gets inserted directly into the SQL
+            query, so it must be one of those two values.
+
     Returns:
-        dict: Dictionary mapping config_id to DataFrame with collision_number and metric value
+        dict: Dictionary mapping config_id to DataFrame with collision_number and metric value.
+            Each value is {"data": DataFrame(collision_number, <metric_name>),
+            "generator_type": str, "random_seed": int}. IDs that don't exist
+            are skipped.
     """
     if not config_ids:
         return {}
@@ -235,10 +308,21 @@ def get_experiment_metrics(config_ids, metric_name, db_path=DB_NAME):
 import sqlite3
 import json
 
-# Update get_experiment_details_and_expressions to include the name field
 def get_experiment_details_and_expressions(config_id):
     """
     Return metadata + initial expressions for a given experiment config.
+
+    Not currently used by the app.
+
+    Returns:
+        tuple: (details, expressions)
+            details: dict with generator, total_collisions, polling_frequency,
+                timestamp, generator_params (parsed from JSON), and name
+            expressions: list of distinct expressions at collision 0, most
+                common first (counts not included)
+
+    Raises:
+        ValueError: if no experiment has that ID.
     """
     conn = sqlite3.connect(DB_NAME)
     conn.row_factory = sqlite3.Row
@@ -292,13 +376,23 @@ def get_experiment_details_and_expressions(config_id):
 def import_json_to_db(json_path, db_path=DB_NAME):
     """
     Import experiment data from a JSON file into the database.
-    
+
+    Not currently used by the app; main.py's /upload_and_import route handles
+    imports instead. This reads an older JSON format:
+        {"config": {"total_collisions", "polling_frequency", "random_seed",
+                    "input_expressions": {"generator", "params"}},
+         "collisions_data": {"collision_100": {"state": [...expressions...],
+                                               "entropy": float,
+                                               "unique_expressions": [...]}}}
+
     Args:
         json_path (str): Path to the JSON file
-        db_path (str): Path to the database file
-        
+        db_path (str): Path to the database file (not actually used; the
+            save functions in models.py always write to DB_NAME)
+
     Returns:
-        int: The ID of the newly created configuration
+        int: The ID of the newly created configuration, or None if the
+            import failed (the error is printed).
     """
     from models import save_configuration, save_experiment_state, save_averages
     
@@ -371,6 +465,12 @@ def import_json_to_db(json_path, db_path=DB_NAME):
 def get_entropy_and_histogram(config_id, collision_number):
     """
     Fetch entropy and histogram (expression + count) for a specific collision.
+
+    Used when a point on the entropy plot is clicked.
+
+    Returns:
+        dict: {"entropy": float or None,
+               "histogram": [{"expression", "count"}, ...] most common first}
     """
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
@@ -404,6 +504,22 @@ def get_entropy_and_histogram(config_id, collision_number):
 
 #db for comparison analysis
 def get_comparison_data(config_id, most=100):
+    """Get the full history of an experiment's most common expressions.
+
+    Finds the `most` expressions with the highest total count across all
+    saved collisions, then returns every saved row for those expressions.
+    Used by the sequence alignment, ordination and dendrogram features.
+
+    Args:
+        config_id (int): The experiment.
+        most (int): How many top expressions to keep. This is inserted
+            directly into the SQL query, so it must be an integer.
+
+    Returns:
+        pandas.DataFrame: Columns collision_number, expression, count,
+            sorted by collision_number. Empty if the database is missing or
+            the query fails.
+    """
     if not check_database_exists():
         return pd.DataFrame()
     conn = sqlite3.connect(DB_NAME)

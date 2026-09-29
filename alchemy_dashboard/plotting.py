@@ -1,4 +1,24 @@
 # alchemy_dashboard/plotting.py
+"""
+Bokeh plots for the Alchemy Dashboard.
+
+Every function here builds a Bokeh figure (or the (script, div) HTML pieces
+for one) that main.py sends to the browser.
+
+Main groups of functions:
+    Shared styling        create_styled_figure, color constants
+    Metric plots          plot_experiment_metrics, create_bokeh_plots_from_metrics,
+                          plot_comparison_metrics
+    Plots from JSON files plot_simulation_metrics, get_simulation_components,
+                          create_bokeh_from_data
+    Plots from the DB     query_df_by_config_id, generate_bokeh_components
+    Expression trees      ASTvisualizer, ASTErr
+    Multi-experiment      create_multi_experiment_dendrogram
+
+"Entropy" measures how evenly the population is spread across different
+expressions; "unique expressions" is how many distinct expressions exist.
+Both are recorded at each sampled collision.
+"""
 
 from bokeh.plotting import figure
 from bokeh.layouts import column, row
@@ -16,14 +36,17 @@ from sklearn.manifold import MDS
 import networkx as nx
 from collections import defaultdict
 
-# Define colors using CSS variables
+# Define colors using CSS variables.
+# These are copies of the website's CSS colors so plots match the page;
+# if the CSS theme changes, update them here too.
 PRIMARY_COLOR = "#4F46E5"  # var(--primary)
 SECONDARY_COLOR = "#0EA5E9"  # var(--secondary)
 ACCENT_COLOR = "#F59E0B"  # var(--accent)
 GRID_COLOR = "#E2E8F0"  # var(--border)
 TEXT_COLOR = "#1E293B"  # var(--text-primary)
 
-# Define plot colors
+# Define plot colors: one per line when several experiments share a plot
+# (repeats after 6)
 PLOT_COLORS = [
     PRIMARY_COLOR,
     SECONDARY_COLOR,
@@ -34,7 +57,21 @@ PLOT_COLORS = [
 ]
 
 def create_styled_figure(title, x_label, y_label, width=800, height=300):
-    """Create a styled Bokeh figure with consistent formatting."""
+    """Create a styled Bokeh figure with consistent formatting.
+
+    Use this instead of bokeh's figure() so all plots share the same fonts,
+    colors, grid, and toolbar.
+
+    Args:
+        title (str): Title shown above the plot.
+        x_label (str): X-axis label.
+        y_label (str): Y-axis label.
+        width (int): Width in pixels.
+        height (int): Height in pixels.
+
+    Returns:
+        Figure: An empty Bokeh figure ready for lines/points to be added.
+    """
     fig = figure(
         title=title,
         x_axis_label=x_label,
@@ -94,12 +131,19 @@ from bokeh.models import ColumnDataSource, HoverTool, TapTool, CustomJS
 def plot_experiment_metrics(df):
     """
     Create plots for a single experiment's metrics.
-    
+
+    Clicking a point on the entropy plot loads a histogram of the expressions
+    at that collision (see the JavaScript callback below).
+
     Args:
-        df (pandas.DataFrame): DataFrame containing metrics data
-        
+        df (pandas.DataFrame): DataFrame containing metrics data, with columns
+            collision_number, entropy, and unique_expressions_count.
+            "unique_expressions" or "len_unique_expressions" are accepted
+            and renamed.
+
     Returns:
         dict: Dictionary of Bokeh figure objects, keyed by plot type
+            ("entropy_plot" and "unique_expressions_plot")
     """
     from bokeh.plotting import figure
     from bokeh.models import ColumnDataSource, HoverTool, BoxSelectTool, LassoSelectTool
@@ -176,7 +220,10 @@ def plot_experiment_metrics(df):
     # Add TapTool to entropy plot
     entropy_plot.add_tools(TapTool())
 
-    # Add JS callback for tap
+    # Add JS callback for tap. This runs in the browser: it fetches
+    # /get_entropy_detail for the clicked collision and puts the result into
+    # the element with id "histogram-content". The page must set
+    # window.currentConfigID to the experiment being shown.
     tap_callback = CustomJS(args=dict(source=entropy_source), code="""
         const selected_index = source.selected.indices[0];
         if (selected_index != null) {
@@ -228,8 +275,14 @@ def plot_comparison_metrics(metric_data, metric_name):
     """
     Create a comparison plot for multiple experiments.
     
+    Draws one line per experiment. Clicking an entry in the legend hides or
+    shows that experiment's line.
+
     Args:
-        metric_data (dict): Dictionary mapping config_id to DataFrame with metric data
+        metric_data (dict): Dictionary mapping config_id to experiment info, as
+            returned by db_utils.get_experiment_metrics(). Each value is a dict
+            with "data" (a DataFrame with collision_number and the metric
+            column), plus "generator_type" and "random_seed" for the legend.
         metric_name (str): Name of the metric to plot ('entropy' or 'unique_expressions')
         
     Returns:
@@ -284,9 +337,14 @@ def plot_comparison_metrics(metric_data, metric_name):
 def plot_simulation_metrics(results):
     """
     Generate plots from simulation results data.
-    
+
     Args:
-        results (dict): Dictionary with simulation results
+        results (dict): Dictionary with simulation results. Its
+            "collisions_data" can be either:
+              - old format: a dict keyed like "collision_100", where each
+                value has "entropy" and a list of "unique_expressions"
+              - new format: a list of dicts with "collision_number",
+                "entropy", and "unique_expressions" (a count)
         
     Returns:
         list: List of Bokeh figure objects
@@ -327,9 +385,14 @@ def plot_simulation_metrics(results):
 def create_bokeh_from_data(data):
     """
     Create Bokeh components from uploaded JSON data.
-    
+
+    Used by the /generate_visuals route. Unlike the other plots, these use
+    Bokeh's default styling.
+
     Args:
-        data (dict): Parsed JSON data from uploaded file
+        data (dict): Parsed JSON data from uploaded file. Must have a
+            "collisions_data" dict keyed like "collision_100"; keys without
+            an underscore are treated as collision 0.
         
     Returns:
         tuple: (script, div) tuple for Bokeh components
@@ -381,11 +444,13 @@ def create_bokeh_plots_from_metrics(metrics_data, title_prefix=""):
     Create Bokeh plots from a list of metrics data.
     
     Args:
-        metrics_data (list): List of tuples containing metrics data
-        title_prefix (str): Optional prefix for plot titles
-        
+        metrics_data (list): List of tuples containing metrics data, each
+            (collision_number, entropy, unique_expressions)
+        title_prefix (str): Optional prefix for plot titles (currently unused)
+
     Returns:
-        list: List of Bokeh figure objects
+        dict: Same as plot_experiment_metrics(): {"entropy_plot",
+            "unique_expressions_plot"}
     """
     # Process data into DataFrame
     data = []
@@ -415,6 +480,10 @@ from .config import DB_NAME
 def query_df_by_config_id(config_id):
     """
     Query Averages table for a config_id and return pandas DataFrame.
+
+    Note: the columns are named collision_num, entropy, and
+    len_unique_expressions, which differ from the names used by
+    plot_experiment_metrics().
     """
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
@@ -434,6 +503,7 @@ def query_df_by_config_id(config_id):
 
 # === Plot Functions ===
 def generate_entropy_plot(df):
+    """Simple entropy line plot from a query_df_by_config_id() DataFrame."""
     p1 = figure(
         title="Entropy Over Time",
         x_axis_label="Collision #",
@@ -445,6 +515,7 @@ def generate_entropy_plot(df):
     return p1
 
 def generate_unique_expr_plot(df):
+    """Simple unique-expression line plot from a query_df_by_config_id() DataFrame."""
     p2 = figure(
         title="Unique Expressions Over Time",
         x_axis_label="Collision #",
@@ -459,6 +530,9 @@ def generate_unique_expr_plot(df):
 def generate_bokeh_components(config_id):
     """
     Pulls dataframe for given config ID, creates both plots, returns script + divs
+
+    Returns:
+        tuple: (script, entropy_div, unique_expressions_div)
     """
     df = query_df_by_config_id(config_id)
 
@@ -475,6 +549,10 @@ def generate_bokeh_components(config_id):
 def get_simulation_components(results_path: str):
     """
     Load results from JSON, generate Bokeh layout, return script and div.
+
+    Used by the home page. The JSON file must be in a format that
+    plot_simulation_metrics() understands. The two plots are stacked
+    vertically.
     """
     with open(results_path, "r") as f:
         results = json.load(f)
@@ -485,8 +563,21 @@ def get_simulation_components(results_path: str):
 
 #=== Plot AST Tree ====
 def ASTvisualizer(expression):
+    """Draw a lambda expression as a tree (its abstract syntax tree).
+
+    The root is at the top and each level of the tree is one row, centered
+    horizontally. Nodes are colored by variable (colors come from
+    ASTGen.getColors), so the same variable has the same color everywhere.
+
+    Args:
+        expression (str): A lambda expression, e.g. "\\x.x".
+
+    Returns:
+        Figure: The tree plot, or an ASTErr() figure with an error message if
+        the expression can't be parsed. This function does not raise.
+    """
     try:
-        #use lambda parser to translate expres
+        #use lambda parser to translate expression into a tree
         parser = LambdaParser(expression)
         Atree = parser.parse()
 
@@ -501,6 +592,11 @@ def ASTvisualizer(expression):
         G = nx.DiGraph()
 
         def build_graph(node, depth=0):
+            """Add `node` and all its children to G; returns the node's ID.
+
+            Node colors: variables and lambdas use their variable's color
+            (yellow/green if none); anything else (e.g. applications) is red.
+            """
             node_id = len(G) # Guarantees unique ID based on current length
 
             if isinstance(node, VariableNode):
@@ -533,6 +629,7 @@ def ASTvisualizer(expression):
         y_spacing = 2.0
         x_spacing = 2.0
 
+        # Each row is centered on x = 0: e.g. 3 nodes go at x = -2, 0, 2
         for depth, nodes_in_level in levels.items():
             total_nodes = len(nodes_in_level)
             for idx, node_id in enumerate(nodes_in_level):
@@ -578,7 +675,7 @@ def ASTvisualizer(expression):
         return ASTErr(f"Error: {str(e)}")
 
 def ASTErr(message):
-   
+    """Return a small placeholder figure that just shows an error message."""
     p = figure(width=600, height=200, title="AST Error")
     p.text(x=[0], y=[0], text=[message], text_align='center', text_baseline='middle')
     p.xaxis.visible = False
@@ -589,6 +686,28 @@ def ASTErr(message):
 # multiple experiment dendrogram
 
 def create_multi_experiment_dendrogram(config_ids, limit=20):
+    """Build one dendrogram (family tree) of expressions from several experiments.
+
+    Takes the most common expressions from each experiment and groups them by
+    how similar they are, measured by Levenshtein (edit) distance: the number
+    of single-character changes needed to turn one expression into another.
+    Similar expressions join low in the tree.
+
+    Each leaf is colored by the experiment it came from; expressions found in
+    more than one experiment are dark grey ("Convergent (Shared)"). Hovering
+    over a leaf shows the expression and where it came from.
+
+    Args:
+        config_ids (list[int]): Experiments to compare.
+        limit (int): How many of the most common expressions to take from
+            each experiment.
+
+    Returns:
+        tuple: (script, div) Bokeh components.
+
+    Note: needs at least 2 distinct expressions in total, or scipy's
+    linkage() will raise an error.
+    """
     from scipy.cluster.hierarchy import linkage, dendrogram
     import pandas as pd
     import numpy as np
@@ -605,7 +724,8 @@ def create_multi_experiment_dendrogram(config_ids, limit=20):
     molecule_metadata = []
     seen_expressions = {} 
 
-    #gather data using user defined molecules
+    #gather data using user defined molecules.
+    # seen_expressions maps each expression -> which experiments it appeared in
     for i, cid in enumerate(config_ids):
         df = get_comparison_data(cid, most=limit) 
         if not df.empty:
@@ -618,7 +738,9 @@ def create_multi_experiment_dendrogram(config_ids, limit=20):
 
     unique_list = list(seen_expressions.keys())
     
-    # matrix math
+    # matrix math: edit distance between every pair of expressions, then
+    # cluster them with average linkage (scipy only computes the layout here;
+    # no_plot=True means Bokeh does the drawing)
     dist_matrix = pairwise_distances(
         np.array(unique_list).reshape(-1, 1), 
         metric=lambda x, y: Levenshtein.distance(str(x[0]), str(y[0]))
@@ -652,6 +774,8 @@ def create_multi_experiment_dendrogram(config_ids, limit=20):
             final_colors.append(data['colors'][0]) 
             final_origins.append(data['origins'][0])
 
+    # scipy places leaves at x = 5, 15, 25, ... so the dots line up with the
+    # ends of the branches
     leaf_source = ColumnDataSource(data={
         'x': [(i * 10) + 5 for i in range(len(ordered_labels))],
         'y': [0] * len(ordered_labels),
@@ -666,7 +790,8 @@ def create_multi_experiment_dendrogram(config_ids, limit=20):
     #legend logic 
     legend_items = []
     
-    # add key item from each experiment
+    # add key item from each experiment. The dots are drawn at NaN so they
+    # never appear on the plot; they only exist to give the legend a color swatch.
     for i, cid in enumerate(config_ids):
         color = PALETTE[i % len(PALETTE)]
         dummy_glyph = p.circle(x=[float('nan')], y=[float('nan')], size=10, color=color, line_color="white")

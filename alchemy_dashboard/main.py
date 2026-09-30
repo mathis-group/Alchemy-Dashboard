@@ -58,9 +58,7 @@ from .plotting import (
 )
 from .models import (
     init_database,
-    save_configuration,
-    save_experiment_state,
-    save_averages,
+    save_experiment_bundle,
     get_experiment_configs,
     save_continuation_metadata,
     get_continuation_metadata,
@@ -541,24 +539,13 @@ def upload_and_import():
         prob_range = json.dumps(data.get("generator_params", {}))
         original_name = data.get("name", "Imported Experiment")
 
-        new_config_id = save_configuration(
-            data.get("random_seed", 0),
-            data.get("generator_type", "Imported"),
-            data.get("total_collisions", 1000),
-            data.get("polling_frequency", 10),
-            prob_range,
-            f"{original_name} (Imported)",
-        )
-
-        # 2. Restore Averages (entropy & unique_expressions)
+        # Prepare all imported rows before opening the experiment transaction.
+        averages_rows = []
         if "collisions_data" in data:
             history = data["collisions_data"].get("experiment_history", {})
             for col_num, metrics in history.items():
-                save_averages(
-                    new_config_id,
-                    int(col_num),
-                    metrics["entropy"],
-                    metrics["unique_expressions"],
+                averages_rows.append(
+                    (int(col_num), metrics["entropy"], metrics["unique_expressions"])
                 )
 
         # 3. Handle Molecular Population
@@ -569,37 +556,35 @@ def upload_and_import():
         # Save initial state (collision 0). Older exports may not include the
         # initial population, so fall back to the final population.
         startup_data = initial_pop if initial_pop else final_pop
-        for item in startup_data:
-            save_experiment_state(new_config_id, 0, item["expression"], item["count"])
+        population_rows = [(0, item["expression"], item["count"]) for item in startup_data]
 
         # Save final state (collision -1) and last collision
         for item in final_pop:
-            save_experiment_state(new_config_id, -1, item["expression"], item["count"])
+            population_rows.append((-1, item["expression"], item["count"]))
             if last_col != -1:
-                save_experiment_state(
-                    new_config_id, last_col, item["expression"], item["count"]
-                )
+                population_rows.append((last_col, item["expression"], item["count"]))
 
         # Also restore expression state at every sampled collision if available
         if "sampled_collisions" in data:
             for col_num, expressions in data["sampled_collisions"].items():
                 for item in expressions:
-                    save_experiment_state(
-                        new_config_id, int(col_num), item["expression"], item["count"]
-                    )
+                    population_rows.append((int(col_num), item["expression"], item["count"]))
 
         # Store original name in generator_params for display.
         # Note: this overwrites the generator params saved in step 1.
-        cursor = sqlite3.connect(DB_NAME).cursor()
-        cursor.execute(
-            "UPDATE Configurations SET probability_range = ? WHERE config_id = ?",
-            (
-                json.dumps({"original_name": original_name, "imported": True}),
-                new_config_id,
-            ),
+        new_config_id = save_experiment_bundle(
+            data.get("random_seed", 0),
+            data.get("generator_type", "Imported"),
+            data.get("total_collisions", 1000),
+            data.get("polling_frequency", 10),
+            prob_range,
+            name=f"{original_name} (Imported)",
+            population_rows=population_rows,
+            averages_rows=averages_rows,
+            configuration_update={
+                "probability_range": json.dumps({"original_name": original_name, "imported": True})
+            },
         )
-        cursor.connection.commit()
-        cursor.connection.close()
 
         return jsonify(
             {
@@ -1126,7 +1111,18 @@ def trigger_extinction():
         }
         result = run_experiment(config)
 
-        new_id = save_configuration(
+        metrics = result.get("metrics", [])
+        population_rows = [(0, expr, count) for expr, count in Counter(survivor_pool).items()]
+        averages_rows = []
+        for metric in metrics:
+            averages_rows.append((metric["collision_number"], metric["entropy"], metric["unique_expressions"]))
+            if "expressions" in metric:
+                population_rows.extend(
+                    (metric["collision_number"], expr, count)
+                    for expr, count in Counter(metric["expressions"]).items()
+                )
+
+        new_id = save_experiment_bundle(
             config["random_seed"],
             "from_file",
             config["total_collisions"],
@@ -1134,32 +1130,11 @@ def trigger_extinction():
             json.dumps(
                 {"event": "extinction", "refill": should_refill, "purged": target_expr}
             ),
-            temp_name,
+            name=lambda config_id: f"Experiment #{config_id}: Extinction ({mode_label}) - Removed: {short_target}",
+            population_rows=population_rows,
+            averages_rows=averages_rows,
+            continuation_metadata=(parent_id, 1.0, len(survivor_pool), 0),
         )
-
-        update_experiment_name(
-            new_id,
-            f"Experiment #{new_id}: Extinction ({mode_label}) - Removed: {short_target}",
-        )
-
-        for expr, count in Counter(survivor_pool).items():
-            save_experiment_state(new_id, 0, expr, count)
-
-        metrics = result.get("metrics", [])
-        for metric in metrics:
-            save_averages(
-                new_id,
-                metric["collision_number"],
-                metric["entropy"],
-                metric["unique_expressions"],
-            )
-            if "expressions" in metric:
-                for expr, count in Counter(metric["expressions"]).items():
-                    save_experiment_state(
-                        new_id, metric["collision_number"], expr, count
-                    )
-
-        save_continuation_metadata(new_id, parent_id, 1.0, len(survivor_pool), 0)
 
         return jsonify({"status": "success", "new_config_id": new_id})
 
@@ -1441,43 +1416,35 @@ def run_simulation_form():
                 )
 
             # Save DB
-            new_id = save_configuration(
+            initial_expressions = result.get("initial_expressions", [])
+            metrics = result.get("metrics", [])
+            population_rows = [(0, expr, count) for expr, count in Counter(initial_expressions).items()]
+            averages_rows = []
+            for metric in metrics:
+                averages_rows.append((metric["collision_number"], metric["entropy"], metric["unique_expressions"]))
+                if "expressions" in metric:
+                    population_rows.extend(
+                        (metric["collision_number"], expr, count)
+                        for expr, count in Counter(metric["expressions"]).items()
+                    )
+            continuation_metadata = None
+            if last_config_id:
+                continuation_metadata = (
+                    last_config_id, 1.0,
+                    len(current_pool or initial_expressions), 0,
+                )
+
+            new_id = save_experiment_bundle(
                 random_seed=random_seed,
                 generator_type=generator_type,
                 total_collisions=total_collisions,
                 polling_frequency=polling_frequency,
                 probability_range=json.dumps(config.get("generator_params", {})),
                 name=exp_name,
+                population_rows=population_rows,
+                averages_rows=averages_rows,
+                continuation_metadata=continuation_metadata,
             )
-
-            # Save population/metrics
-            initial_expressions = result.get("initial_expressions", [])
-            for expr, count in Counter(initial_expressions).items():
-                save_experiment_state(new_id, 0, expr, count)
-
-            metrics = result.get("metrics", [])
-            for metric in metrics:
-                save_averages(
-                    new_id,
-                    metric["collision_number"],
-                    metric["entropy"],
-                    metric["unique_expressions"],
-                )
-                if "expressions" in metric:
-                    for expr, count in Counter(metric["expressions"]).items():
-                        save_experiment_state(
-                            new_id, metric["collision_number"], expr, count
-                        )
-
-            # Link Lineage
-            if last_config_id:
-                save_continuation_metadata(
-                    new_id,
-                    last_config_id,
-                    1.0,
-                    len(current_pool or initial_expressions),
-                    0,
-                )
 
             # SETUP FOR NEXT GENERATION IN THE LOOP
             last_config_id = new_id
@@ -1559,37 +1526,28 @@ def trigger_invasive_species():
         }
 
         result = run_experiment(config)
-        new_id = save_configuration(
+        metrics = result.get("metrics", [])
+        population_rows = [(0, expr, count) for expr, count in Counter(survivor_expressions).items()]
+        averages_rows = []
+        for metric in metrics:
+            averages_rows.append((metric["collision_number"], metric["entropy"], metric["unique_expressions"]))
+            if "expressions" in metric:
+                population_rows.extend(
+                    (metric["collision_number"], expr, count)
+                    for expr, count in Counter(metric["expressions"]).items()
+                )
+        new_id = save_experiment_bundle(
             random_seed=parent_config[1],
             generator_type="from_file",
             total_collisions=1000,
             polling_frequency=10,
             name=config["experiment_name"],
-        )
-
-        for expr, count in Counter(survivor_expressions).items():
-            save_experiment_state(new_id, 0, expr, count)
-
-        metrics = result.get("metrics", [])
-        for metric in metrics:
-            save_averages(
-                new_id,
-                metric["collision_number"],
-                metric["entropy"],
-                metric["unique_expressions"],
-            )
-            if "expressions" in metric:
-                for expr, count in Counter(metric["expressions"]).items():
-                    save_experiment_state(
-                        new_id, metric["collision_number"], expr, count
-                    )
-
-        save_continuation_metadata(
-            new_id,
-            parent_config_id,
-            1.0,
-            len(survivor_expressions) - invasive_count,
-            invasive_count,
+            population_rows=population_rows,
+            averages_rows=averages_rows,
+            continuation_metadata=(
+                parent_config_id, 1.0,
+                len(survivor_expressions) - invasive_count, invasive_count,
+            ),
         )
 
         return jsonify({"status": "success", "new_config_id": new_id})

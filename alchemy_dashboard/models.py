@@ -166,6 +166,96 @@ def save_configuration(random_seed, generator_type, total_collisions, polling_fr
     return config_id
 
 
+def save_experiment_bundle(
+    random_seed,
+    generator_type,
+    total_collisions,
+    polling_frequency,
+    probability_range=None,
+    freevar_generation_probability=None,
+    name=None,
+    population_rows=(),
+    averages_rows=(),
+    continuation_metadata=None,
+    configuration_update=None,
+):
+    """Save one experiment and all associated rows in a single transaction.
+
+    ``population_rows`` contains ``(collision_number, expression, count)``
+    tuples and ``averages_rows`` contains ``(collision_number, entropy,
+    unique_expressions)`` tuples. Optional continuation metadata is a tuple
+    of ``(parent_config_id, fraction_used, reused_count, additional_count)``.
+    ``configuration_update`` may be a mapping of configuration column names
+    to values, used by imports that replace metadata after restoring data.
+    """
+    conn = sqlite3.connect(DB_NAME)
+    try:
+        cursor = conn.cursor()
+        experiment_name = name if isinstance(name, str) and name else "Unnamed Experiment"
+        cursor.execute(
+            """INSERT INTO Configurations
+            (random_seed, generator_type, total_collisions, polling_frequency,
+             probability_range, freevar_generation_probability, name)
+            VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            (random_seed, generator_type, total_collisions, polling_frequency,
+             probability_range, freevar_generation_probability, experiment_name),
+        )
+        config_id = cursor.lastrowid
+        if callable(name):
+            cursor.execute(
+                "UPDATE Configurations SET name = ? WHERE config_id = ?",
+                (name(config_id), config_id),
+            )
+        elif name is None:
+            cursor.execute(
+                "UPDATE Configurations SET name = ? WHERE config_id = ?",
+                (f"Experiment {config_id}", config_id),
+            )
+
+        cursor.executemany(
+            """INSERT INTO Experiment
+            (config_id, collision_number, expression, count)
+            VALUES (?, ?, ?, ?)""",
+            ((config_id, collision, expression, count)
+             for collision, expression, count in population_rows),
+        )
+        cursor.executemany(
+            """INSERT INTO Averages
+            (config_id, collision_number, entropy, unique_expressions)
+            VALUES (?, ?, ?, ?)""",
+            ((config_id, collision, entropy, unique)
+             for collision, entropy, unique in averages_rows),
+        )
+
+        if continuation_metadata is not None:
+            parent_id, fraction, reused_count, additional_count = continuation_metadata
+            cursor.execute(
+                """INSERT OR REPLACE INTO ContinuationMetadata
+                (child_config_id, parent_config_id, fraction_used,
+                 reused_expression_count, additional_expression_count)
+                VALUES (?, ?, ?, ?, ?)""",
+                (config_id, parent_id, fraction, reused_count, additional_count),
+            )
+
+        if configuration_update:
+            allowed_columns = {"probability_range", "freevar_generation_probability", "name"}
+            if not set(configuration_update).issubset(allowed_columns):
+                raise ValueError("Unsupported configuration update column")
+            assignments = ", ".join(f"{column} = ?" for column in configuration_update)
+            cursor.execute(
+                f"UPDATE Configurations SET {assignments} WHERE config_id = ?",
+                (*configuration_update.values(), config_id),
+            )
+
+        conn.commit()
+        return config_id
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 def update_experiment_name(config_id, new_name):
     """
     Update the name of an existing experiment.

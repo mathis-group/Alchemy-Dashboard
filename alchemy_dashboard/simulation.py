@@ -25,6 +25,17 @@ import random
 from collections import Counter
 from. db_utils import get_expressions_for_collision
 
+def _seed_hex(seed):
+    """Convert an integer seed to the 64-char hex string the alchemy generators expect.
+
+    The Rust side takes a 32-byte seed as hex; passing None makes it pick a
+    random seed, so runs would not be reproducible.
+    """
+    if seed is None:
+        return None
+    return f"{int(seed) % (1 << 256):064x}"
+
+
 def load_input_expressions(generator_type, gen_params):
     """
     Load initial expressions based on generator type and parameters.
@@ -215,7 +226,8 @@ def run_experiment(config):
             size=config['size'],
             freevar_generation_probability=config['freevar_probability'],
             max_free_vars=config['max_free_vars'],
-            std=std
+            std=std,
+            seed=_seed_hex(config['random_seed'])
         )
         # Generate initial expressions
         new_expressions = generator.generate_n(config['num_expressions'])
@@ -231,7 +243,7 @@ def run_experiment(config):
             app_range=(config['app_low'], config['app_high']),
             min_depth=config.get('min_depth', 1),
             max_depth=config['max_depth'],
-          
+            seed=_seed_hex(config['random_seed'])
         )
         # Generate initial expressions. generate() can return nothing, and
         # those attempts are skipped, so the result may have fewer than `desired`.

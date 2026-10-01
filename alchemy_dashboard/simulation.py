@@ -276,7 +276,7 @@ def run_experiment(config):
         raise ValueError("No initial expressions available to start the simulation")
     
     # Initialize simulation: an empty soup, then add the starting population
-    simulation = alchemy.PySoup()
+    simulation = alchemy.PySoup(seed=_seed_hex(config['random_seed']))
     simulation.perturb(initial_expressions)
     
     # Run simulation

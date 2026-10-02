@@ -30,7 +30,9 @@ from scipy.cluster.hierarchy import linkage, dendrogram
 from scipy.spatial.distance import squareform
 from sklearn.metrics import pairwise_distances
 from bokeh.plotting import figure
-from bokeh.models import ColumnDataSource, HoverTool
+from bokeh.models import ColumnDataSource, HoverTool, LinearColorMapper, ColorBar
+from bokeh.transform import transform
+from bokeh.palettes import Viridis256
 from bokeh.embed import components
 from .db_utils import get_comparison_data
 
@@ -71,7 +73,9 @@ def create_dendrogram(config_id, mode='ward'):
         matrix = matrix.iloc[::snapshot_rate]
         
         Z = linkage(matrix.values, method='ward')
-        labels = matrix.index.astype(str).tolist()
+        # Store numeric collision values for the color mapper
+        collision_numbers = matrix.index.tolist()
+        labels = [str(c) for c in collision_numbers]
         # hover functionality: the most common expression in each snapshot
         hover_data = matrix.idxmax(axis=1).tolist()
         hover_label = "Dominant Molecule"
@@ -89,6 +93,7 @@ def create_dendrogram(config_id, mode='ward'):
         # edit distance drawing. squareform() converts the square distance
         # table into the condensed form linkage() expects.
         Z = linkage(squareform(dist_matrix), method='average')
+        collision_numbers = None
         labels = unique_molecules
         hover_data = unique_molecules 
         hover_label = "Molecule Structure"
@@ -108,12 +113,19 @@ def create_dendrogram(config_id, mode='ward'):
     source = ColumnDataSource(data={'xs': ddata['icoord'], 'ys': ddata['dcoord']})
 
     # leaf coordiantes
-    leaf_source = ColumnDataSource(data={
+    leaf_data = {
         'x': [i*10 + 5 for i in range(len(labels))],
         'y': [0] * len(labels),
         'label': labels,
         'detail': hover_data
-    })
+    }
+
+    # Reorder numeric collision numbers according to dendrogram leaf order
+    if mode == 'ward':
+        ordered_collisions = [collision_numbers[i] for i in leaves]
+        leaf_data['collision'] = ordered_collisions
+
+    leaf_source = ColumnDataSource(leaf_data)
 
     p = figure(title=title, width=850, height=450, 
                tools="pan,wheel_zoom,reset,save", background_fill_color="#f8fafc")
@@ -121,30 +133,58 @@ def create_dendrogram(config_id, mode='ward'):
     # branches
     p.multi_line('xs', 'ys', source=source, color="#4F46E5", line_width=2, alpha=0.6)
 
-    # hover function: invisible circles on each leaf that turn red when the
-    # mouse is over them and show the tooltip
-    leaf_renderer = p.circle('x', 'y', source=leaf_source, size=15, 
-                             fill_alpha=0, line_alpha=0, hover_fill_alpha=0.3, hover_fill_color="red")
+    p.xaxis.ticker = [i*10 + 5 for i in range(len(labels))]
 
+    # Edit mode hides the x-axis labels because lambda expressions are too long to fit
+    # Ward mode labels each leaf with its collision number and adds color bar
+    if mode == 'ward':
+        # Setup continuous linear color mapper across snapshot collision range
+        min_col, max_col = min(ordered_collisions), max(ordered_collisions)
+        mapper = LinearColorMapper(palette=Viridis256, low=min_col, high=max_col)
+
+        # hover function: invisible circles on each leaf that turn red when the
+        # mouse is over them and show the tooltip
+        # added colors according to LinearColorMapper
+        leaf_renderer = p.circle(
+            'x', 'y', source=leaf_source, size=10, 
+            fill_color=transform('collision', mapper),
+            line_color="#4F46E5", line_width=1,
+            hover_fill_alpha=0.3, hover_fill_color="red"
+        )
+
+        # Add the ColorBar below the figure
+        color_bar = ColorBar(
+            color_mapper=mapper,
+            title="Collision Number",
+            title_text_font_size="9pt",
+            title_text_font_style="bold",
+            location=(0, 0),
+            height=12
+        )
+        p.add_layout(color_bar, 'below')
+
+        p.xaxis.major_label_overrides = {i*10 + 5: str(label) for i, label in enumerate(labels)}
+        p.xaxis.major_label_orientation = "vertical"
+        p.xaxis.major_label_text_font_size = "9pt"
+
+    else:
+        # hover function: invisible circles on each leaf that turn red when the
+        # mouse is over them and show the tooltip
+        leaf_renderer = p.circle('x', 'y', source=leaf_source, size=15, 
+                                 fill_alpha=0, line_alpha=0, hover_fill_alpha=0.3, hover_fill_color="red")
+        
+        p.xaxis.major_label_text_color = None
+        p.xaxis.major_tick_line_color = None
+        p.xaxis.minor_tick_line_color = None
+
+    # Add HoverTool
     hover = HoverTool(renderers=[leaf_renderer], tooltips=[
-        ("Name", "@label"),
+        ("Collision" if mode == 'ward' else "Name", "@label"),
         (hover_label, "@detail")
     ])
     p.add_tools(hover)
 
     p.xaxis.ticker = [i*10 + 5 for i in range(len(labels))]
-
-    # Edit mode hides the x-axis labels because lambda expressions are too
-    # long to fit; ward mode labels each leaf with its collision number.
-    if mode == 'edit':
-
-        p.xaxis.major_label_text_color = None
-        p.xaxis.major_tick_line_color = None
-        p.xaxis.minor_tick_line_color = None
-    else:
-        p.xaxis.major_label_overrides = {i*10 + 5: str(label) for i, label in enumerate(labels)}
-        p.xaxis.major_label_orientation = "vertical"
-        p.xaxis.major_label_text_font_size = "9pt"
 
     return components(p)
 

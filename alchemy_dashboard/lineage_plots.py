@@ -96,7 +96,7 @@ def create_dendrogram(config_id, mode='ward'):
         collision_numbers = None
         labels = unique_molecules
         hover_data = unique_molecules 
-        hover_label = "Molecule Structure"
+        hover_label = "Molecule"
         title = "Edit Distance"
 
     # drawing the dendrograms. no_plot=True: scipy only calculates the
@@ -163,6 +163,12 @@ def create_dendrogram(config_id, mode='ward'):
         )
         p.add_layout(color_bar, 'below')
 
+        # Add HoverTool
+        hover = HoverTool(renderers=[leaf_renderer], tooltips=[
+            ("Collision", "@label"),
+            (hover_label, "@detail")
+        ])
+
         p.xaxis.major_label_overrides = {i*10 + 5: str(label) for i, label in enumerate(labels)}
         p.xaxis.major_label_orientation = "vertical"
         p.xaxis.major_label_text_font_size = "9pt"
@@ -171,17 +177,18 @@ def create_dendrogram(config_id, mode='ward'):
         # hover function: invisible circles on each leaf that turn red when the
         # mouse is over them and show the tooltip
         leaf_renderer = p.circle('x', 'y', source=leaf_source, size=15, 
-                                 fill_alpha=0, line_alpha=0, hover_fill_alpha=0.3, hover_fill_color="red")
+                                 fill_color="#4F46E5", fillline_color="black", line_width=1,
+                                 hover_fill_alpha=0.3, hover_fill_color="red")
+
+        # Add HoverTool
+        hover = HoverTool(renderers=[leaf_renderer], tooltips=[
+            (hover_label, "@detail")
+        ])
         
         p.xaxis.major_label_text_color = None
         p.xaxis.major_tick_line_color = None
         p.xaxis.minor_tick_line_color = None
 
-    # Add HoverTool
-    hover = HoverTool(renderers=[leaf_renderer], tooltips=[
-        ("Collision" if mode == 'ward' else "Name", "@label"),
-        (hover_label, "@detail")
-    ])
     p.add_tools(hover)
 
     p.xaxis.ticker = [i*10 + 5 for i in range(len(labels))]

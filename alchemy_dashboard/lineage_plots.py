@@ -177,7 +177,7 @@ def create_dendrogram(config_id, mode='ward'):
         # hover function: invisible circles on each leaf that turn red when the
         # mouse is over them and show the tooltip
         leaf_renderer = p.circle('x', 'y', source=leaf_source, size=15, 
-                                 fill_color="#4F46E5", fillline_color="black", line_width=1,
+                                 fill_color="#4F46E5", line_color="black", line_width=1,
                                  hover_fill_alpha=0.3, hover_fill_color="red")
 
         # Add HoverTool

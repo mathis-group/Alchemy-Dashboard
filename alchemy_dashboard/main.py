@@ -542,12 +542,12 @@ def upload_and_import():
         original_name = data.get("name", "Imported Experiment")
 
         new_config_id = save_configuration(
-            data.get("random_seed", 0),
-            data.get("generator_type", "Imported"),
-            data.get("total_collisions", 1000),
-            data.get("polling_frequency", 10),
-            prob_range,
-            f"{original_name} (Imported)",
+            random_seed=data.get("random_seed", 0),
+            generator_type=data.get("generator_type", "Imported"),
+            total_collisions=data.get("total_collisions", 1000),
+            polling_frequency=data.get("polling_frequency", 10),
+            probability_range=prob_range,
+            name=f"{original_name} (Imported)",
         )
 
         # 2. Restore Averages (entropy & unique_expressions)
@@ -1127,14 +1127,14 @@ def trigger_extinction():
         result = run_experiment(config)
 
         new_id = save_configuration(
-            config["random_seed"],
-            "from_file",
-            config["total_collisions"],
-            config["polling_frequency"],
-            json.dumps(
+            random_seed=config["random_seed"],
+            generator_type="from_file",
+            total_collisions=config["total_collisions"],
+            polling_frequency=config["polling_frequency"],
+            probability_range=json.dumps(
                 {"event": "extinction", "refill": should_refill, "purged": target_expr}
             ),
-            temp_name,
+            name=temp_name,
         )
 
         update_experiment_name(

@@ -38,6 +38,7 @@ Route overview:
 
 import os
 import json
+import random
 import io
 import re
 from collections import Counter
@@ -1055,8 +1056,9 @@ def trigger_extinction():
     JSON body:
         config_id (int): parent experiment.
         target_expression (str): expression to wipe out.
-        refill (bool, optional): if True, top survivors are duplicated until
-            the population is back to its original size.
+        refill (bool, optional): if True, survivors are copied (drawn at
+            random, weighted by abundance) until the population is back to
+            its original size.
 
     Returns: JSON {"status", "new_config_id"}.
     Side effects: creates a new experiment linked to the parent.
@@ -1102,14 +1104,15 @@ def trigger_extinction():
 
             x_to_add = original_n - len(survivor_pool)
 
-            # find top survivors by count to add extra copies of.
-            # Copies are handed out round-robin, starting with the most common.
-            top_performers = sorted(survivors, key=lambda x: x[1], reverse=True)
-
-            for i in range(x_to_add):
-
-                boost_target = top_performers[i % len(top_performers)][0]
-                survivor_pool.append(boost_target)
+            # Each added copy is drawn at random, weighted by how common each
+            # survivor is, so the refill keeps the survivors' relative
+            # abundances. Seeded with the parent's seed so it is reproducible.
+            rng = random.Random(parent_config[1])
+            survivor_exprs = [expr for expr, _ in survivors]
+            survivor_counts = [count for _, count in survivors]
+            survivor_pool.extend(
+                rng.choices(survivor_exprs, weights=survivor_counts, k=x_to_add)
+            )
         else:
 
             for expr, count in survivors:

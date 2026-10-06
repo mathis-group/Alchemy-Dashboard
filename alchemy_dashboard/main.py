@@ -48,7 +48,7 @@ from werkzeug.utils import secure_filename
 import sqlite3
 from .config import DB_NAME
 
-from .simulation import run_experiment
+from .simulation import run_experiment, canonical_expression
 from .plotting import (
     get_simulation_components,
     plot_experiment_metrics,
@@ -1070,6 +1070,10 @@ def trigger_extinction():
         if not parent_id or not target_expr:
             return jsonify({"status": "error", "message": "Missing data"}), 400
 
+        # Stored expressions are in the engine's canonical form, so match the
+        # target that way too (e.g. a typed "\x.x" matches the stored "λa.a").
+        target_expr = canonical_expression(target_expr) or target_expr
+
         parent_data = get_experiment_details(parent_id)
         parent_config = parent_data[0]
 
@@ -1530,6 +1534,13 @@ def trigger_invasive_species():
 
         if not parent_config_id:
             return jsonify({"status": "error", "message": "Missing config_id"}), 400
+
+        # Store the invader the way the engine writes it (e.g. "\x.x" -> "λa.a"),
+        # so it matches its own copies in later collisions and in lineage plots.
+        canonical_invader = canonical_expression(invasive_expr)
+        if canonical_invader is None:
+            return jsonify({"status": "error", "message": f"Could not parse expression: {invasive_expr}"}), 400
+        invasive_expr = canonical_invader
 
         # fetch parent data
         parent_data = get_experiment_details(parent_config_id)

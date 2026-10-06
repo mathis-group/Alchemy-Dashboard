@@ -84,6 +84,36 @@ from .ASTGen import LambdaParser, VariableNode, LambdaNode, getColors
 #   [6] freevar_probability                        [7] timestamp
 #   [8] name               (may be None; falls back to "Experiment <id>")
 
+# Generator settings that are actually passed to each generator. Only these
+# are saved, so the stored values describe what was really run.
+GENERATOR_PARAM_KEYS = {
+    "BTree": ["size", "freevar_probability", "max_free_vars", "standardization", "num_expressions"],
+    "Fontana": ["abs_low", "abs_high", "app_low", "app_high", "min_depth", "max_depth", "initial_expression_count"],
+}
+
+
+def generator_params_from_config(config):
+    """The generator settings from a run config, as saved to probability_range."""
+    keys = GENERATOR_PARAM_KEYS.get(config.get("generator_type"), [])
+    return {key: config[key] for key in keys if key in config}
+
+
+def stored_generator_params(config):
+    """Generator settings for a CONFIG ROW, as shown on every page.
+
+    Reads the saved JSON and adds freevar_probability from its own column if
+    it is not already there. Nothing is filled in that was not saved.
+    """
+    try:
+        params = json.loads(config[5]) if config[5] else {}
+    except json.JSONDecodeError:
+        params = {}
+    if not isinstance(params, dict):
+        params = {}
+    if config[6] is not None:
+        params.setdefault("freevar_probability", config[6])
+    return params
+
 app = Flask(__name__)
 
 # Folder where JSON files uploaded through /upload_json are saved
@@ -174,14 +204,7 @@ def database_view():
     if not config:
         return "Experiment not found", 404
 
-    # Generator params are stored as a JSON string (see CONFIG ROW above)
-    try:
-        stored_params = json.loads(config[5]) if config[5] else {}
-    except json.JSONDecodeError:
-        stored_params = {}
-
-    if config[6] is not None:
-        stored_params.setdefault("freevar_probability", config[6])
+    stored_params = stored_generator_params(config)
 
     # Parent/lineage info if this experiment continued from another one
     continuation_meta = get_continuation_metadata(config[0])
@@ -323,13 +346,7 @@ def continuation_config(config_id):
         if not config:
             return jsonify({"status": "error", "message": "Experiment not found"}), 404
 
-        try:
-            generator_params = json.loads(config[5]) if config[5] else {}
-        except json.JSONDecodeError:
-            generator_params = {}
-
-        if config[6] is not None:
-            generator_params.setdefault("freevar_probability", config[6])
+        generator_params = stored_generator_params(config)
 
         final_state = get_expressions_for_collision(config_id, -1)
         final_population = sum(count for _, count in final_state) if final_state else 0
@@ -722,12 +739,7 @@ def view_experiment(config_id):
         "generator_type": config[2],
         "total_collisions": config[3],
         "polling_frequency": config[4],
-        "generator_params": {
-            "freevar_generation_probability": (
-                config[6] if config[6] is not None else 0.5
-            ),
-            "probability_range": json.loads(config[5]) if config[5] else {},
-        },
+        "generator_params": stored_generator_params(config),
         "timestamp": config[7],
         "name": config[8] or f"Experiment {config_id}",
     }
@@ -919,12 +931,7 @@ def get_experiment_metadata(config_id):
         config, metrics, initial_expressions = get_experiment_details(config_id)
         if not config:
             return jsonify({"status": "error", "message": "Experiment not found"}), 404
-        try:
-            generator_params = json.loads(config[5]) if config[5] else {}
-        except:
-            generator_params = {}
-        if config[6] is not None:
-            generator_params.setdefault("freevar_probability", config[6])
+        generator_params = stored_generator_params(config)
         return jsonify(
             {
                 "status": "success",
@@ -1448,7 +1455,8 @@ def run_simulation_form():
                 generator_type=generator_type,
                 total_collisions=total_collisions,
                 polling_frequency=polling_frequency,
-                probability_range=json.dumps(config.get("generator_params", {})),
+                probability_range=json.dumps(generator_params_from_config(config)),
+                freevar_generation_probability=config.get("freevar_probability"),
                 name=exp_name,
             )
 

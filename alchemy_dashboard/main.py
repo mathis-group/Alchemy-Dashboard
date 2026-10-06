@@ -1230,8 +1230,8 @@ def generate_multi_dendrogram():
 def run_simulation_form():
     """Run one or more generations of a simulation and save each to the DB.
 
-    Each generation starts from the 15 most common surviving expressions of
-    the previous one, and is linked to it as a continuation.
+    Each generation starts from the full final population of the previous
+    one, and is linked to it as a continuation.
 
     Form data:
         total_collisions, polling_frequency, random_seed (int)
@@ -1281,11 +1281,9 @@ def run_simulation_form():
                     400,
                 )
 
-            # Keep only the 15 most common expressions (with their full counts)
+            # Carry the parent's full final population into the next generation
             current_pool = []
-            for expr, count in sorted(final_state, key=lambda x: x[1], reverse=True)[
-                :15
-            ]:
+            for expr, count in final_state:
                 current_pool.extend([expr] * count)
 
             generator_type = "from_file"
@@ -1487,15 +1485,9 @@ def run_simulation_form():
             last_config_id = new_id
             generator_type = "from_file"
 
-            # Extract survivors directly from memory for the next loop
-            # (same top-15 rule as when continuing from a parent above)
+            # Carry the full final population into the next generation
             if metrics and "expressions" in metrics[-1]:
-                survivors = Counter(metrics[-1]["expressions"]).items()
-                current_pool = []
-                for expr, count in sorted(survivors, key=lambda x: x[1], reverse=True)[
-                    :15
-                ]:
-                    current_pool.extend([expr] * count)
+                current_pool = list(metrics[-1]["expressions"])
             else:
                 raise ValueError(
                     f"{exp_name} produced no surviving expressions to pass on."

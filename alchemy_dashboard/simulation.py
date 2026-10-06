@@ -279,24 +279,24 @@ def run_experiment(config):
     simulation = alchemy.PySoup(seed=_seed_hex(config['random_seed']))
     simulation.perturb(initial_expressions)
     
-    # Run simulation
-    for i in range(config['total_collisions']):
+    def record_snapshot(collision_number):
+        metrics.append({
+            'collision_number': collision_number,
+            'entropy': simulation.population_entropy(),
+            'unique_expressions': len(simulation.unique_expressions()),
+            'expressions': simulation.expressions()  # Add full state data
+        })
+
+    # Collision 0 is the starting population, before any reaction
+    record_snapshot(0)
+
+    # Run simulation. Snapshot n is the state after n collisions, taken every
+    # polling_frequency collisions, and the final collision is always recorded.
+    total_collisions = config['total_collisions']
+    for n in range(1, total_collisions + 1):
         simulation.simulate_for(1, log=False)
-        
-        # Record metrics at specified intervals.
-        # Snapshots are taken after collision i runs, at i = 0,
-        # polling_frequency, 2 * polling_frequency, ... so the very last
-        # collision is only recorded if it lands on one of those numbers.
-        if i % config['polling_frequency'] == 0:
-            # Get current state expressions
-            current_expressions = simulation.expressions()
-            
-            metrics.append({
-                'collision_number': i,
-                'entropy': simulation.population_entropy(),
-                'unique_expressions': len(simulation.unique_expressions()),
-                'expressions': current_expressions  # Add full state data
-            })
+        if n % config['polling_frequency'] == 0 or n == total_collisions:
+            record_snapshot(n)
     
     return {
         'metrics': metrics,

@@ -1142,9 +1142,6 @@ def trigger_extinction():
             f"Experiment #{new_id}: Extinction ({mode_label}) - Removed: {short_target}",
         )
 
-        for expr, count in Counter(survivor_pool).items():
-            save_experiment_state(new_id, 0, expr, count)
-
         metrics = result.get("metrics", [])
         for metric in metrics:
             save_averages(
@@ -1451,9 +1448,9 @@ def run_simulation_form():
             )
 
             # Save population/metrics
+            # Collision 0 (the starting soup) comes from the simulation's
+            # first snapshot, so it is not saved separately here.
             initial_expressions = result.get("initial_expressions", [])
-            for expr, count in Counter(initial_expressions).items():
-                save_experiment_state(new_id, 0, expr, count)
 
             metrics = result.get("metrics", [])
             for metric in metrics:
@@ -1566,9 +1563,6 @@ def trigger_invasive_species():
             polling_frequency=10,
             name=config["experiment_name"],
         )
-
-        for expr, count in Counter(survivor_expressions).items():
-            save_experiment_state(new_id, 0, expr, count)
 
         metrics = result.get("metrics", [])
         for metric in metrics:

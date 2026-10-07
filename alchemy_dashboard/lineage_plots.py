@@ -244,7 +244,7 @@ def create_multi_experiment_dendrogram(config_ids, mode='ward'):
         
         # Top 50 survivors from every experiment (shared expressions only appear once)
         for cid in config_ids:
-            df = get_comparison_data(cid, most=50) 
+            df = get_comparison_data(cid, most=50, survivors_only=True)
             if not df.empty:
                 all_unique_expressions.update(df['expression'].unique())
         

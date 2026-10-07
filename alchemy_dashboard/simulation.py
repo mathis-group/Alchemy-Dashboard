@@ -25,6 +25,30 @@ import random
 from collections import Counter
 from. db_utils import get_expressions_for_collision
 
+def _seed_hex(seed):
+    """Convert an integer seed to the 64-char hex string the alchemy generators expect.
+
+    The Rust side takes a 32-byte seed as hex; passing None makes it pick a
+    random seed, so runs would not be reproducible.
+    """
+    if seed is None:
+        return None
+    return f"{int(seed) % (1 << 256):064x}"
+
+
+def canonical_expression(expr):
+    """Return the engine's canonical form of one expression, e.g. "\\x.x" -> "λa.a".
+
+    Expressions are stored the way the engine writes them, so user input must
+    be converted before it is stored or compared. Returns None if the engine
+    cannot parse the expression.
+    """
+    soup = alchemy.PySoup()
+    soup.perturb([expr])
+    parsed = soup.expressions()
+    return parsed[0] if parsed else None
+
+
 def load_input_expressions(generator_type, gen_params):
     """
     Load initial expressions based on generator type and parameters.
@@ -185,7 +209,10 @@ def run_experiment(config):
               collisions, each with collision_number, entropy,
               unique_expressions (a count), and expressions (the full
               population at that point)
-            - initial_expressions: the starting population
+            - initial_expressions: the starting population, in the engine's
+              canonical form (unparseable expressions removed)
+            - dropped_expression_count: how many starting expressions the
+              engine could not parse
             - continuation_summary: how many expressions came from the
               parent vs. were newly generated
 
@@ -215,7 +242,8 @@ def run_experiment(config):
             size=config['size'],
             freevar_generation_probability=config['freevar_probability'],
             max_free_vars=config['max_free_vars'],
-            std=std
+            std=std,
+            seed=_seed_hex(config['random_seed'])
         )
         # Generate initial expressions
         new_expressions = generator.generate_n(config['num_expressions'])
@@ -231,7 +259,7 @@ def run_experiment(config):
             app_range=(config['app_low'], config['app_high']),
             min_depth=config.get('min_depth', 1),
             max_depth=config['max_depth'],
-          
+            seed=_seed_hex(config['random_seed'])
         )
         # Generate initial expressions. generate() can return nothing, and
         # those attempts are skipped, so the result may have fewer than `desired`.
@@ -264,31 +292,40 @@ def run_experiment(config):
         raise ValueError("No initial expressions available to start the simulation")
     
     # Initialize simulation: an empty soup, then add the starting population
-    simulation = alchemy.PySoup()
+    simulation = alchemy.PySoup(seed=_seed_hex(config['random_seed']))
     simulation.perturb(initial_expressions)
-    
-    # Run simulation
-    for i in range(config['total_collisions']):
+
+    # The engine converts expressions to its canonical form and silently
+    # drops any it cannot parse, so report what was actually simulated.
+    requested_count = len(initial_expressions)
+    initial_expressions = simulation.expressions()
+    dropped_count = requested_count - len(initial_expressions)
+    if dropped_count:
+        print(f"Warning: {dropped_count} starting expressions could not be parsed and were dropped")
+
+    def record_snapshot(collision_number):
+        metrics.append({
+            'collision_number': collision_number,
+            'entropy': simulation.population_entropy(),
+            'unique_expressions': len(simulation.unique_expressions()),
+            'expressions': simulation.expressions()  # Add full state data
+        })
+
+    # Collision 0 is the starting population, before any reaction
+    record_snapshot(0)
+
+    # Run simulation. Snapshot n is the state after n collisions, taken every
+    # polling_frequency collisions, and the final collision is always recorded.
+    total_collisions = config['total_collisions']
+    for n in range(1, total_collisions + 1):
         simulation.simulate_for(1, log=False)
-        
-        # Record metrics at specified intervals.
-        # Snapshots are taken after collision i runs, at i = 0,
-        # polling_frequency, 2 * polling_frequency, ... so the very last
-        # collision is only recorded if it lands on one of those numbers.
-        if i % config['polling_frequency'] == 0:
-            # Get current state expressions
-            current_expressions = simulation.expressions()
-            
-            metrics.append({
-                'collision_number': i,
-                'entropy': simulation.population_entropy(),
-                'unique_expressions': len(simulation.unique_expressions()),
-                'expressions': current_expressions  # Add full state data
-            })
+        if n % config['polling_frequency'] == 0 or n == total_collisions:
+            record_snapshot(n)
     
     return {
         'metrics': metrics,
         'initial_expressions': initial_expressions,
+        'dropped_expression_count': dropped_count,
         'continuation_summary': {
             'parent_config_id': parent_config_id,
             'fraction_used': fraction_used,

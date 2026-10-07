@@ -38,6 +38,7 @@ Route overview:
 
 import os
 import json
+import random
 import io
 import re
 from collections import Counter
@@ -48,7 +49,7 @@ from werkzeug.utils import secure_filename
 import sqlite3
 from .config import DB_NAME
 
-from .simulation import run_experiment
+from .simulation import run_experiment, canonical_expression
 from .plotting import (
     get_simulation_components,
     plot_experiment_metrics,
@@ -82,6 +83,36 @@ from .ASTGen import LambdaParser, VariableNode, LambdaNode, getColors
 #   [5] probability_range  (JSON string of generator params)
 #   [6] freevar_probability                        [7] timestamp
 #   [8] name               (may be None; falls back to "Experiment <id>")
+
+# Generator settings that are actually passed to each generator. Only these
+# are saved, so the stored values describe what was really run.
+GENERATOR_PARAM_KEYS = {
+    "BTree": ["size", "freevar_probability", "max_free_vars", "standardization", "num_expressions"],
+    "Fontana": ["abs_low", "abs_high", "app_low", "app_high", "min_depth", "max_depth", "initial_expression_count"],
+}
+
+
+def generator_params_from_config(config):
+    """The generator settings from a run config, as saved to probability_range."""
+    keys = GENERATOR_PARAM_KEYS.get(config.get("generator_type"), [])
+    return {key: config[key] for key in keys if key in config}
+
+
+def stored_generator_params(config):
+    """Generator settings for a CONFIG ROW, as shown on every page.
+
+    Reads the saved JSON and adds freevar_probability from its own column if
+    it is not already there. Nothing is filled in that was not saved.
+    """
+    try:
+        params = json.loads(config[5]) if config[5] else {}
+    except json.JSONDecodeError:
+        params = {}
+    if not isinstance(params, dict):
+        params = {}
+    if config[6] is not None:
+        params.setdefault("freevar_probability", config[6])
+    return params
 
 app = Flask(__name__)
 
@@ -173,14 +204,7 @@ def database_view():
     if not config:
         return "Experiment not found", 404
 
-    # Generator params are stored as a JSON string (see CONFIG ROW above)
-    try:
-        stored_params = json.loads(config[5]) if config[5] else {}
-    except json.JSONDecodeError:
-        stored_params = {}
-
-    if config[6] is not None:
-        stored_params.setdefault("freevar_probability", config[6])
+    stored_params = stored_generator_params(config)
 
     # Parent/lineage info if this experiment continued from another one
     continuation_meta = get_continuation_metadata(config[0])
@@ -322,13 +346,7 @@ def continuation_config(config_id):
         if not config:
             return jsonify({"status": "error", "message": "Experiment not found"}), 404
 
-        try:
-            generator_params = json.loads(config[5]) if config[5] else {}
-        except json.JSONDecodeError:
-            generator_params = {}
-
-        if config[6] is not None:
-            generator_params.setdefault("freevar_probability", config[6])
+        generator_params = stored_generator_params(config)
 
         final_state = get_expressions_for_collision(config_id, -1)
         final_population = sum(count for _, count in final_state) if final_state else 0
@@ -542,12 +560,12 @@ def upload_and_import():
         original_name = data.get("name", "Imported Experiment")
 
         new_config_id = save_configuration(
-            data.get("random_seed", 0),
-            data.get("generator_type", "Imported"),
-            data.get("total_collisions", 1000),
-            data.get("polling_frequency", 10),
-            prob_range,
-            f"{original_name} (Imported)",
+            random_seed=data.get("random_seed", 0),
+            generator_type=data.get("generator_type", "Imported"),
+            total_collisions=data.get("total_collisions", 1000),
+            polling_frequency=data.get("polling_frequency", 10),
+            probability_range=prob_range,
+            name=f"{original_name} (Imported)",
         )
 
         # 2. Restore Averages (entropy & unique_expressions)
@@ -721,12 +739,7 @@ def view_experiment(config_id):
         "generator_type": config[2],
         "total_collisions": config[3],
         "polling_frequency": config[4],
-        "generator_params": {
-            "freevar_generation_probability": (
-                config[6] if config[6] is not None else 0.5
-            ),
-            "probability_range": json.loads(config[5]) if config[5] else {},
-        },
+        "generator_params": stored_generator_params(config),
         "timestamp": config[7],
         "name": config[8] or f"Experiment {config_id}",
     }
@@ -918,12 +931,7 @@ def get_experiment_metadata(config_id):
         config, metrics, initial_expressions = get_experiment_details(config_id)
         if not config:
             return jsonify({"status": "error", "message": "Experiment not found"}), 404
-        try:
-            generator_params = json.loads(config[5]) if config[5] else {}
-        except:
-            generator_params = {}
-        if config[6] is not None:
-            generator_params.setdefault("freevar_probability", config[6])
+        generator_params = stored_generator_params(config)
         return jsonify(
             {
                 "status": "success",
@@ -1055,8 +1063,9 @@ def trigger_extinction():
     JSON body:
         config_id (int): parent experiment.
         target_expression (str): expression to wipe out.
-        refill (bool, optional): if True, top survivors are duplicated until
-            the population is back to its original size.
+        refill (bool, optional): if True, survivors are copied (drawn at
+            random, weighted by abundance) until the population is back to
+            its original size.
 
     Returns: JSON {"status", "new_config_id"}.
     Side effects: creates a new experiment linked to the parent.
@@ -1069,6 +1078,10 @@ def trigger_extinction():
 
         if not parent_id or not target_expr:
             return jsonify({"status": "error", "message": "Missing data"}), 400
+
+        # Stored expressions are in the engine's canonical form, so match the
+        # target that way too (e.g. a typed "\x.x" matches the stored "λa.a").
+        target_expr = canonical_expression(target_expr) or target_expr
 
         parent_data = get_experiment_details(parent_id)
         parent_config = parent_data[0]
@@ -1098,14 +1111,15 @@ def trigger_extinction():
 
             x_to_add = original_n - len(survivor_pool)
 
-            # find top survivors by count to add extra copies of.
-            # Copies are handed out round-robin, starting with the most common.
-            top_performers = sorted(survivors, key=lambda x: x[1], reverse=True)
-
-            for i in range(x_to_add):
-
-                boost_target = top_performers[i % len(top_performers)][0]
-                survivor_pool.append(boost_target)
+            # Each added copy is drawn at random, weighted by how common each
+            # survivor is, so the refill keeps the survivors' relative
+            # abundances. Seeded with the parent's seed so it is reproducible.
+            rng = random.Random(parent_config[1])
+            survivor_exprs = [expr for expr, _ in survivors]
+            survivor_counts = [count for _, count in survivors]
+            survivor_pool.extend(
+                rng.choices(survivor_exprs, weights=survivor_counts, k=x_to_add)
+            )
         else:
 
             for expr, count in survivors:
@@ -1127,23 +1141,20 @@ def trigger_extinction():
         result = run_experiment(config)
 
         new_id = save_configuration(
-            config["random_seed"],
-            "from_file",
-            config["total_collisions"],
-            config["polling_frequency"],
-            json.dumps(
+            random_seed=config["random_seed"],
+            generator_type="from_file",
+            total_collisions=config["total_collisions"],
+            polling_frequency=config["polling_frequency"],
+            probability_range=json.dumps(
                 {"event": "extinction", "refill": should_refill, "purged": target_expr}
             ),
-            temp_name,
+            name=temp_name,
         )
 
         update_experiment_name(
             new_id,
             f"Experiment #{new_id}: Extinction ({mode_label}) - Removed: {short_target}",
         )
-
-        for expr, count in Counter(survivor_pool).items():
-            save_experiment_state(new_id, 0, expr, count)
 
         metrics = result.get("metrics", [])
         for metric in metrics:
@@ -1226,8 +1237,8 @@ def generate_multi_dendrogram():
 def run_simulation_form():
     """Run one or more generations of a simulation and save each to the DB.
 
-    Each generation starts from the 15 most common surviving expressions of
-    the previous one, and is linked to it as a continuation.
+    Each generation starts from the full final population of the previous
+    one, and is linked to it as a continuation.
 
     Form data:
         total_collisions, polling_frequency, random_seed (int)
@@ -1277,11 +1288,9 @@ def run_simulation_form():
                     400,
                 )
 
-            # Keep only the 15 most common expressions (with their full counts)
+            # Carry the parent's full final population into the next generation
             current_pool = []
-            for expr, count in sorted(final_state, key=lambda x: x[1], reverse=True)[
-                :15
-            ]:
+            for expr, count in final_state:
                 current_pool.extend([expr] * count)
 
             generator_type = "from_file"
@@ -1446,14 +1455,15 @@ def run_simulation_form():
                 generator_type=generator_type,
                 total_collisions=total_collisions,
                 polling_frequency=polling_frequency,
-                probability_range=json.dumps(config.get("generator_params", {})),
+                probability_range=json.dumps(generator_params_from_config(config)),
+                freevar_generation_probability=config.get("freevar_probability"),
                 name=exp_name,
             )
 
             # Save population/metrics
+            # Collision 0 (the starting soup) comes from the simulation's
+            # first snapshot, so it is not saved separately here.
             initial_expressions = result.get("initial_expressions", [])
-            for expr, count in Counter(initial_expressions).items():
-                save_experiment_state(new_id, 0, expr, count)
 
             metrics = result.get("metrics", [])
             for metric in metrics:
@@ -1483,15 +1493,9 @@ def run_simulation_form():
             last_config_id = new_id
             generator_type = "from_file"
 
-            # Extract survivors directly from memory for the next loop
-            # (same top-15 rule as when continuing from a parent above)
+            # Carry the full final population into the next generation
             if metrics and "expressions" in metrics[-1]:
-                survivors = Counter(metrics[-1]["expressions"]).items()
-                current_pool = []
-                for expr, count in sorted(survivors, key=lambda x: x[1], reverse=True)[
-                    :15
-                ]:
-                    current_pool.extend([expr] * count)
+                current_pool = list(metrics[-1]["expressions"])
             else:
                 raise ValueError(
                     f"{exp_name} produced no surviving expressions to pass on."
@@ -1534,6 +1538,13 @@ def trigger_invasive_species():
         if not parent_config_id:
             return jsonify({"status": "error", "message": "Missing config_id"}), 400
 
+        # Store the invader the way the engine writes it (e.g. "\x.x" -> "λa.a"),
+        # so it matches its own copies in later collisions and in lineage plots.
+        canonical_invader = canonical_expression(invasive_expr)
+        if canonical_invader is None:
+            return jsonify({"status": "error", "message": f"Could not parse expression: {invasive_expr}"}), 400
+        invasive_expr = canonical_invader
+
         # fetch parent data
         parent_data = get_experiment_details(parent_config_id)
         parent_config = parent_data[0]
@@ -1566,9 +1577,6 @@ def trigger_invasive_species():
             polling_frequency=10,
             name=config["experiment_name"],
         )
-
-        for expr, count in Counter(survivor_expressions).items():
-            save_experiment_state(new_id, 0, expr, count)
 
         metrics = result.get("metrics", [])
         for metric in metrics:

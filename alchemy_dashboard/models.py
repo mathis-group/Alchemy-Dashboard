@@ -107,7 +107,27 @@ def init_database():
         cursor.execute("SELECT reused_expression_count FROM ContinuationMetadata LIMIT 1")
     except sqlite3.OperationalError:
         cursor.execute("ALTER TABLE ContinuationMetadata ADD COLUMN reused_expression_count INTEGER NOT NULL DEFAULT 0")
-    
+
+    # One row per (experiment, collision, expression). Older databases stored
+    # collision 0 twice (the starting pool plus a snapshot taken after the
+    # first collision); keep the first row written, which is the starting
+    # pool, and drop the rest before adding the constraint.
+    cursor.execute(
+        "SELECT 1 FROM sqlite_master WHERE type='index' AND name='idx_experiment_unique_state'"
+    )
+    if cursor.fetchone() is None:
+        cursor.execute('''
+        DELETE FROM Experiment
+        WHERE experiment_id NOT IN (
+            SELECT MIN(experiment_id) FROM Experiment
+            GROUP BY config_id, collision_number, expression
+        )
+        ''')
+        cursor.execute('''
+        CREATE UNIQUE INDEX idx_experiment_unique_state
+        ON Experiment (config_id, collision_number, expression)
+        ''')
+
     conn.commit()
     conn.close()
     
@@ -218,10 +238,14 @@ def save_experiment_state(config_id, collision_number, expression, count):
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
     
+    # If this expression is already stored for this collision, replace its
+    # count rather than adding a second row.
     cursor.execute('''
     INSERT INTO Experiment 
     (config_id, collision_number, expression, count)
     VALUES (?, ?, ?, ?)
+    ON CONFLICT (config_id, collision_number, expression)
+    DO UPDATE SET count = excluded.count
     ''', (
         config_id,
         collision_number,

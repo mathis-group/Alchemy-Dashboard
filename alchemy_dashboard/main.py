@@ -1521,11 +1521,14 @@ def trigger_invasive_species():
         config_id (int): parent experiment.
         expression (str, optional): the invader, default "\\x.x".
         count (int, optional): how many copies to add, default 50.
+        proportional_delete (bool, optional): remove `count` random survivors
+            first. Fail if `count` exceeds the population size.
 
     Note: the new run always uses 1000 collisions and polls every 10,
     regardless of the parent's settings.
 
-    Returns: JSON {"status", "new_config_id"}.
+    Returns: JSON {"status", "new_config_id", "removed_count", "warning"}.
+    "warning" is set when an injection exceeds the population size.
     """
     try:
         data = request.get_json()
@@ -1549,10 +1552,27 @@ def trigger_invasive_species():
         for expr, count in final_state:
             survivor_expressions.extend([expr] * count)
 
+        population_size = len(survivor_expressions)
+
+        # Fail if injecting + deleting more than the population size
+        if proportional_delete and invasive_count > population_size:
+            return jsonify({
+                "status": "error",
+                "message": f"Cannot remove {invasive_count} expressions: the population only has {population_size}.",
+            }), 400
+
+        # Display warning if injecting (only) more than the population size, experiment still proceeds
+        warning = None
+        if not proportional_delete and invasive_count > population_size:
+            warning = (
+                f"Injected {invasive_count} copies, which is more than the existing "
+                f"population of {population_size}."
+            )
+
         # Remove a proportion of the existing population if flag is passed in true
         removed_count = 0
         if proportional_delete:
-            removed_count = min(invasive_count, len(survivor_expressions))
+            removed_count = invasive_count
             if removed_count > 0:
                 rng = random.Random(parent_config[1])
                 drop = set(rng.sample(range(len(survivor_expressions)), removed_count))
@@ -1604,7 +1624,7 @@ def trigger_invasive_species():
             invasive_count,
         )
 
-        return jsonify({'status': 'success', 'new_config_id': new_id, 'removed_count': removed_count})
+        return jsonify({'status': 'success', 'new_config_id': new_id, 'removed_count': removed_count, 'warning': warning})
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 

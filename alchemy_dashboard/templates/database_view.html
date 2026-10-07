@@ -434,7 +434,7 @@
                         <i></i> Inject Species Only
                     </button>
 
-                    <button class="btn btn-warning w-100 fw-bold" id="invasive-tab-btn" onclick="triggerInvasionFromTab(proportional_delete = true)">
+                    <button class="btn btn-warning w-100 fw-bold" id="invasive-with-deletion-tab-btn" onclick="triggerInvasionFromTab(proportional_delete = true)">
                         <i></i> Inject Species + Proportional Deletion
                     </button>
                 </div>
@@ -1314,6 +1314,9 @@ document.getElementById('tree_mode_dropdown').addEventListener('change', functio
             .then(response => response.json())
             .then(data => {
                 if (data.status === 'success') {
+                    if (data.warning) {
+                        alert(`Warning: ${data.warning}`);
+                    }
                     alert(`Invasive species injected! ${count} copies of "${expr}" added. ${proportional_delete ? ` ${data.removed_count} expressions were removed to keep the population size constant.` : ''} New timeline created.`);
                     window.location.href = `/database?config_id=${data.new_config_id}`;
                 } else {

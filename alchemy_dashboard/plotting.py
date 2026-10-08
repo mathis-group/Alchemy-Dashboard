@@ -727,7 +727,7 @@ def create_multi_experiment_dendrogram(config_ids, limit=20):
     #gather data using user defined molecules.
     # seen_expressions maps each expression -> which experiments it appeared in
     for i, cid in enumerate(config_ids):
-        df = get_comparison_data(cid, most=limit) 
+        df = get_comparison_data(cid, most=limit, survivors_only=True)
         if not df.empty:
             color = PALETTE[i % len(PALETTE)]
             for expr in df['expression'].unique():

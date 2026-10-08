@@ -1,4 +1,4 @@
-"""
+﻿"""
 Dendrogram (tree) plots that show how an experiment's population changes and
 how its expressions relate to each other.
 
@@ -30,7 +30,9 @@ from scipy.cluster.hierarchy import linkage, dendrogram
 from scipy.spatial.distance import squareform
 from sklearn.metrics import pairwise_distances
 from bokeh.plotting import figure
-from bokeh.models import ColumnDataSource, HoverTool
+from bokeh.models import ColumnDataSource, HoverTool, LinearColorMapper, ColorBar
+from bokeh.transform import transform
+from bokeh.palettes import Viridis256
 from bokeh.embed import components
 from .db_utils import get_comparison_data
 
@@ -61,17 +63,19 @@ def create_dendrogram(config_id, mode='ward'):
 
     # pivot data into a table: one row per collision, one column per
     # expression, each cell = how many copies existed (0 if none)
-    matrix = df.pivot_table(index="collision_number", columns="expression", 
+    matrix = df.pivot_table(index="collision_number", columns="expression",
                             values="count", aggfunc='sum').fillna(0)
-    
+
     if mode == 'ward':
         # ward distance logic.
         # Keep every Nth row so there are at most ~40 leaves (keeps it readable)
         snapshot_rate = max(1, len(matrix) // 40)
         matrix = matrix.iloc[::snapshot_rate]
-        
+
         Z = linkage(matrix.values, method='ward')
-        labels = matrix.index.astype(str).tolist()
+        # Store numeric collision values for the color mapper
+        collision_numbers = matrix.index.tolist()
+        labels = [str(c) for c in collision_numbers]
         # hover functionality: the most common expression in each snapshot
         hover_data = matrix.idxmax(axis=1).tolist()
         hover_label = "Dominant Molecule"
@@ -79,19 +83,20 @@ def create_dendrogram(config_id, mode='ward'):
     else:
         # edit distance logic
         unique_molecules = matrix.columns.tolist()
-        
+
         # calculate pairwise distance
         dist_matrix = pairwise_distances(
-            np.array(unique_molecules).reshape(-1, 1), 
+            np.array(unique_molecules).reshape(-1, 1),
             metric=lambda x, y: Levenshtein.distance(str(x[0]), str(y[0]))
         )
-        
+
         # edit distance drawing. squareform() converts the square distance
         # table into the condensed form linkage() expects.
         Z = linkage(squareform(dist_matrix), method='average')
+        collision_numbers = None
         labels = unique_molecules
-        hover_data = unique_molecules 
-        hover_label = "Molecule Structure"
+        hover_data = unique_molecules
+        hover_label = "Molecule"
         title = "Edit Distance"
 
     # drawing the dendrograms. no_plot=True: scipy only calculates the
@@ -108,43 +113,85 @@ def create_dendrogram(config_id, mode='ward'):
     source = ColumnDataSource(data={'xs': ddata['icoord'], 'ys': ddata['dcoord']})
 
     # leaf coordiantes
-    leaf_source = ColumnDataSource(data={
+    leaf_data = {
         'x': [i*10 + 5 for i in range(len(labels))],
         'y': [0] * len(labels),
         'label': labels,
         'detail': hover_data
-    })
+    }
 
-    p = figure(title=title, width=850, height=450, 
+    # Reorder numeric collision numbers according to dendrogram leaf order
+    if mode == 'ward':
+        ordered_collisions = [collision_numbers[i] for i in leaves]
+        leaf_data['collision'] = ordered_collisions
+
+    leaf_source = ColumnDataSource(leaf_data)
+
+    p = figure(title=title, width=850, height=450,
                tools="pan,wheel_zoom,reset,save", background_fill_color="#f8fafc")
 
     # branches
     p.multi_line('xs', 'ys', source=source, color="#4F46E5", line_width=2, alpha=0.6)
 
-    # hover function: invisible circles on each leaf that turn red when the
-    # mouse is over them and show the tooltip
-    leaf_renderer = p.circle('x', 'y', source=leaf_source, size=15, 
-                             fill_alpha=0, line_alpha=0, hover_fill_alpha=0.3, hover_fill_color="red")
-
-    hover = HoverTool(renderers=[leaf_renderer], tooltips=[
-        ("Name", "@label"),
-        (hover_label, "@detail")
-    ])
-    p.add_tools(hover)
-
     p.xaxis.ticker = [i*10 + 5 for i in range(len(labels))]
 
-    # Edit mode hides the x-axis labels because lambda expressions are too
-    # long to fit; ward mode labels each leaf with its collision number.
-    if mode == 'edit':
+    # Edit mode hides the x-axis labels because lambda expressions are too long to fit
+    # Ward mode labels each leaf with its collision number and adds color bar
+    if mode == 'ward':
+        # Setup continuous linear color mapper across snapshot collision range
+        min_col, max_col = min(ordered_collisions), max(ordered_collisions)
+        mapper = LinearColorMapper(palette=Viridis256, low=min_col, high=max_col)
+
+        # hover function: invisible circles on each leaf that turn red when the
+        # mouse is over them and show the tooltip
+        # added colors according to LinearColorMapper
+        leaf_renderer = p.circle(
+            'x', 'y', source=leaf_source, size=10,
+            fill_color=transform('collision', mapper),
+            line_color="#4F46E5", line_width=1,
+            hover_fill_alpha=0.3, hover_fill_color="red"
+        )
+
+        # Add the ColorBar below the figure
+        color_bar = ColorBar(
+            color_mapper=mapper,
+            title="Collision Number",
+            title_text_font_size="9pt",
+            title_text_font_style="bold",
+            location=(0, 0),
+            height=12
+        )
+        p.add_layout(color_bar, 'below')
+
+        # Add HoverTool
+        hover = HoverTool(renderers=[leaf_renderer], tooltips=[
+            ("Collision", "@label"),
+            (hover_label, "@detail")
+        ])
+
+        p.xaxis.major_label_overrides = {i*10 + 5: str(label) for i, label in enumerate(labels)}
+        p.xaxis.major_label_orientation = "vertical"
+        p.xaxis.major_label_text_font_size = "9pt"
+
+    else:
+        # hover function: invisible circles on each leaf that turn red when the
+        # mouse is over them and show the tooltip
+        leaf_renderer = p.circle('x', 'y', source=leaf_source, size=15,
+                                 fill_color="#4F46E5", line_color="black", line_width=1,
+                                 hover_fill_alpha=0.3, hover_fill_color="red")
+
+        # Add HoverTool
+        hover = HoverTool(renderers=[leaf_renderer], tooltips=[
+            (hover_label, "@detail")
+        ])
 
         p.xaxis.major_label_text_color = None
         p.xaxis.major_tick_line_color = None
         p.xaxis.minor_tick_line_color = None
-    else:
-        p.xaxis.major_label_overrides = {i*10 + 5: str(label) for i, label in enumerate(labels)}
-        p.xaxis.major_label_orientation = "vertical"
-        p.xaxis.major_label_text_font_size = "9pt"
+
+    p.add_tools(hover)
+
+    p.xaxis.ticker = [i*10 + 5 for i in range(len(labels))]
 
     return components(p)
 
@@ -194,8 +241,8 @@ def create_multi_experiment_dendrogram(config_ids, mode='ward'):
 
             state = get_expressions_for_collision(cid, -1)
             if not state: continue
-            
-            state_dict = dict(state) 
+
+            state_dict = dict(state)
             final_states[label] = state_dict
             all_unique_expressions.update(state_dict.keys())
 
@@ -216,82 +263,82 @@ def create_multi_experiment_dendrogram(config_ids, mode='ward'):
         Z = linkage(df.values, method='ward')
         ddata = dendrogram(Z, no_plot=True)
 
-        p = figure(title="Meta-Ecosystem Comparison (Ward Distance)", 
+        p = figure(title="Meta-Ecosystem Comparison (Ward Distance)",
                    height=500, sizing_mode="stretch_width",
                    toolbar_location="above", tools="pan,wheel_zoom,box_zoom,reset,save")
-        
+
         for i, d in zip(ddata['icoord'], ddata['dcoord']):
             p.line(i, d, line_color="#4F46E5", line_width=2)
 
         leaves = ddata['leaves']
         labels = [df.index[leaf] for leaf in leaves]
-        tick_locs = [(i * 10) + 5 for i in range(len(leaves))] 
-        
+        tick_locs = [(i * 10) + 5 for i in range(len(leaves))]
+
         p.xaxis.ticker = tick_locs
         p.xaxis.major_label_overrides = {loc: label for loc, label in zip(tick_locs, labels)}
-        p.xaxis.major_label_orientation = 0.8 
+        p.xaxis.major_label_orientation = 0.8
         p.yaxis.axis_label = "Population Variance"
 
         return components(p)
 
     elif mode == 'edit':
-        #Levenstein 
+        #Levenstein
         from scipy.spatial.distance import squareform
         from sklearn.metrics import pairwise_distances
         from bokeh.models import ColumnDataSource, HoverTool
 
         all_unique_expressions = set()
-        
+
         # Top 50 survivors from every experiment (shared expressions only appear once)
         for cid in config_ids:
-            df = get_comparison_data(cid, most=50) 
+            df = get_comparison_data(cid, most=50, survivors_only=True)
             if not df.empty:
                 all_unique_expressions.update(df['expression'].unique())
-        
+
         unique_molecules = list(all_unique_expressions)
-        
+
         if not unique_molecules:
             raise ValueError("No expressions found to compare.")
-            
+
         # Calculate Levenshtein typos across the giant pooled bucket
         dist_matrix = pairwise_distances(
-            np.array(unique_molecules).reshape(-1, 1), 
+            np.array(unique_molecules).reshape(-1, 1),
             metric=lambda x, y: Levenshtein.distance(str(x[0]), str(y[0]))
         )
-        
+
         Z = linkage(squareform(dist_matrix), method='average')
         ddata = dendrogram(Z, no_plot=True)
-        
-        p = figure(title="Cross-Experiment Structural Similarity (Edit Distance)", 
+
+        p = figure(title="Cross-Experiment Structural Similarity (Edit Distance)",
                    height=500, sizing_mode="stretch_width",
                    toolbar_location="above", tools="pan,wheel_zoom,box_zoom,reset,save")
-        
+
         # Draw the branches in a different color to distinguish modes
         source = ColumnDataSource(data={'xs': ddata['icoord'], 'ys': ddata['dcoord']})
         p.multi_line('xs', 'ys', source=source, color="#10B981", line_width=2, alpha=0.8)
-        
-     
+
+
         labels = unique_molecules
         leaves = ddata['leaves']
         ordered_labels = [labels[leaf] for leaf in leaves]
-        
+
         leaf_source = ColumnDataSource(data={
             'x': [(i * 10) + 5 for i in range(len(ordered_labels))],
             'y': [0] * len(ordered_labels),
             'detail': ordered_labels
         })
-        
-        leaf_renderer = p.circle('x', 'y', source=leaf_source, size=15, 
+
+        leaf_renderer = p.circle('x', 'y', source=leaf_source, size=15,
                                  fill_alpha=0, line_alpha=0, hover_fill_alpha=0.5, hover_fill_color="red")
-        
+
         hover = HoverTool(renderers=[leaf_renderer], tooltips=[("Molecule", "@detail")])
         p.add_tools(hover)
-        
+
         # Hide the text on the X-axis because Lambda strings are too long
         p.xaxis.ticker = [(i * 10) + 5 for i in range(len(ordered_labels))]
         p.xaxis.major_label_text_color = None
         p.xaxis.major_tick_line_color = None
         p.xaxis.minor_tick_line_color = None
         p.yaxis.axis_label = "Edit Distance"
-        
+
         return components(p)

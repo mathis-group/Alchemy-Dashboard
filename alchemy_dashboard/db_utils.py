@@ -394,7 +394,7 @@ def import_json_to_db(json_path, db_path=DB_NAME):
         int: The ID of the newly created configuration, or None if the
             import failed (the error is printed).
     """
-    from models import save_configuration, save_experiment_state, save_averages
+    from .models import save_experiment_bundle
     
     try:
         with open(json_path, 'r') as f:
@@ -425,18 +425,10 @@ def import_json_to_db(json_path, db_path=DB_NAME):
         # Generate random seed if not present
         random_seed = config_data.get("random_seed", 12345)
         
-        # Save configuration to database
-        config_id = save_configuration(
-            random_seed,
-            generator_type,
-            total_collisions,
-            polling_frequency,
-            probability_range,
-            freevar_probability
-        )
-        
         # Process collision data
         collisions_data = data.get("collisions_data", {})
+        population_rows = []
+        averages_rows = []
         
         for key, collision in collisions_data.items():
             collision_number = int(key.split("_")[1]) if "_" in key else 0
@@ -448,12 +440,22 @@ def import_json_to_db(json_path, db_path=DB_NAME):
             from collections import Counter
             expr_counter = Counter(state)
             
-            # Save each expression with its count
+            # Prepare each expression count for the experiment batch.
             for expr, count in expr_counter.items():
-                save_experiment_state(config_id, collision_number, expr, count)
+                population_rows.append((collision_number, expr, count))
             
-            # Save metrics
-            save_averages(config_id, collision_number, entropy, unique_expressions)
+            averages_rows.append((collision_number, entropy, unique_expressions))
+
+        config_id = save_experiment_bundle(
+            random_seed,
+            generator_type,
+            total_collisions,
+            polling_frequency,
+            probability_range,
+            freevar_probability,
+            population_rows=population_rows,
+            averages_rows=averages_rows,
+        )
         
         return config_id
         

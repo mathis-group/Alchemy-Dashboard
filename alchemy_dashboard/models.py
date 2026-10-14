@@ -48,7 +48,8 @@ def init_database():
         probability_range TEXT,
         freevar_generation_probability REAL,
         timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-        name TEXT
+        name TEXT,
+        rust_config TEXT
     )
     ''')
     
@@ -61,6 +62,15 @@ def init_database():
             cursor.execute("UPDATE Configurations SET name = 'Experiment ' || config_id WHERE name IS NULL")
     except Exception as e:
         print(f"Error adding name column: {e}")
+
+    # Add rust_config to databases created before it existed. It holds the
+    # full JSON config each experiment ran with; older rows stay NULL.
+    try:
+        cursor.execute("SELECT name FROM pragma_table_info('Configurations') WHERE name='rust_config'")
+        if not cursor.fetchone():
+            cursor.execute("ALTER TABLE Configurations ADD COLUMN rust_config TEXT")
+    except Exception as e:
+        print(f"Error adding rust_config column: {e}")
     
     # Create Experiment table: one row per (experiment, collision, expression)
     # with how many copies of that expression were in the population
@@ -132,7 +142,8 @@ def init_database():
     conn.close()
     
 def save_configuration(random_seed, generator_type, total_collisions, polling_frequency, 
-                      probability_range=None, freevar_generation_probability=None, name=None):
+                      probability_range=None, freevar_generation_probability=None, name=None,
+                      rust_config=None):
     """
     Save experiment configuration to the database.
     
@@ -145,6 +156,7 @@ def save_configuration(random_seed, generator_type, total_collisions, polling_fr
         freevar_generation_probability (float): Probability of generating free variables
         name (str): User-specified name for the experiment (optional).
             If omitted, the experiment is named "Experiment <id>".
+        rust_config (str): The full JSON config the experiment ran with (optional).
 
     Returns:
         int: The ID of the newly created configuration
@@ -158,8 +170,8 @@ def save_configuration(random_seed, generator_type, total_collisions, polling_fr
     cursor.execute('''
     INSERT INTO Configurations 
     (random_seed, generator_type, total_collisions, polling_frequency, 
-     probability_range, freevar_generation_probability, name)
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+     probability_range, freevar_generation_probability, name, rust_config)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     ''', (
         random_seed,
         generator_type,
@@ -167,7 +179,8 @@ def save_configuration(random_seed, generator_type, total_collisions, polling_fr
         polling_frequency,
         probability_range,
         freevar_generation_probability,
-        default_name
+        default_name,
+        rust_config
     ))
     
     config_id = cursor.lastrowid

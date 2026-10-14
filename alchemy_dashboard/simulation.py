@@ -436,6 +436,7 @@ def run_experiment(config):
     
     return {
         'metrics': metrics,
+        'rust_config': rust_config_json,
         'initial_expressions': initial_expressions,
         'dropped_expression_count': dropped_count,
         'continuation_summary': {

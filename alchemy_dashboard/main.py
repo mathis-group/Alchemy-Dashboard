@@ -1151,6 +1151,7 @@ def trigger_extinction():
                 {"event": "extinction", "refill": should_refill, "purged": target_expr}
             ),
             name=temp_name,
+            rust_config=result["rust_config"],
         )
 
         update_experiment_name(
@@ -1460,6 +1461,7 @@ def run_simulation_form():
                 probability_range=json.dumps(generator_params_from_config(config)),
                 freevar_generation_probability=config.get("freevar_probability"),
                 name=exp_name,
+                rust_config=result["rust_config"],
             )
 
             # Save population/metrics
@@ -1608,6 +1610,7 @@ def trigger_invasive_species():
             total_collisions=1000,
             polling_frequency=10,
             name=config["experiment_name"],
+            rust_config=result["rust_config"],
         )
 
         metrics = result.get("metrics", [])

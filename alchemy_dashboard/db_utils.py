@@ -131,6 +131,26 @@ def get_experiment_details(config_id):
     
     return config, metrics, initial_expressions
 
+def get_rust_config(config_id):
+    """Get the JSON config an experiment ran with.
+
+    Args:
+        config_id (int): The experiment to look up.
+
+    Returns:
+        str or None: the saved config, or None if the experiment doesn't
+            exist or was saved before configs were stored.
+    """
+    conn = sqlite3.connect(DB_NAME)
+    try:
+        row = conn.execute(
+            "SELECT rust_config FROM Configurations WHERE config_id = ?",
+            (config_id,),
+        ).fetchone()
+        return row[0] if row else None
+    finally:
+        conn.close()
+
 import pandas as pd
 
 def query_df_by_config_id(config_id):

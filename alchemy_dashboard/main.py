@@ -51,7 +51,7 @@ from werkzeug.utils import secure_filename
 import sqlite3
 from .config import DB_NAME
 
-from .simulation import run_experiment, canonical_expression
+from .simulation import run_experiment, canonical_expression, settings_from_rust_config
 from .plotting import (
     get_simulation_components,
     plot_experiment_metrics,
@@ -76,6 +76,7 @@ from .db_utils import (
     get_experiment_metrics,
     get_expressions_for_collision,
     get_entropy_and_histogram,
+    get_rust_config,
 )
 from .ASTGen import LambdaParser, VariableNode, LambdaNode, getColors
 
@@ -1140,6 +1141,8 @@ def trigger_extinction():
             "random_seed": parent_config[1],
             "experiment_name": temp_name,
         }
+        # Keep the parent's reactor and soup settings
+        config.update(settings_from_rust_config(get_rust_config(parent_id)))
         result = run_experiment(config)
 
         new_id = save_configuration(
@@ -1313,6 +1316,10 @@ def run_simulation_form():
                 "experiment_name": exp_name,
                 "expressions": current_pool,
             }
+
+            # A child generation keeps its parent's reactor and soup settings
+            if last_config_id:
+                config.update(settings_from_rust_config(get_rust_config(last_config_id)))
 
             # Apply parameters for Gen 1 if it is a FRESH start
             if gen == 0 and not recursive_parent_id:
@@ -1602,6 +1609,8 @@ def trigger_invasive_species():
             "random_seed": parent_config[1],
             "experiment_name": f"Invasion{' (Proportional Delete)' if proportional_delete else ' (No Delete)'}: {invasive_expr[:20]} (Parent: {parent_config_id})",
         }
+        # Keep the parent's reactor and soup settings
+        config.update(settings_from_rust_config(get_rust_config(parent_config_id)))
 
         result = run_experiment(config)
         new_id = save_configuration(

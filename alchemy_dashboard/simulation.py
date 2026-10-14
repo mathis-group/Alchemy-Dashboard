@@ -56,6 +56,30 @@ SOUP_DEFAULTS = {
 }
 
 
+def settings_from_rust_config(rust_config_json):
+    """Read the reactor and soup settings back out of a saved config.
+
+    The reverse of build_rust_config_json, for child runs (recursive,
+    extinction, invasive species) that should keep their parent's settings.
+
+    Args:
+        rust_config_json (str or None): a config saved by an earlier run.
+
+    Returns:
+        dict: the REACTOR_DEFAULTS and SOUP_DEFAULTS keys found in the
+            config. Empty for experiments saved before configs were stored,
+            so those children use the defaults.
+    """
+    if not rust_config_json:
+        return {}
+    rust_config = json.loads(rust_config_json)
+    reactor = rust_config["expression"]["UntypedLambda"]["reactor"]
+    soup = rust_config["soup_config"]
+    settings = {key: reactor[key] for key in REACTOR_DEFAULTS if key in reactor}
+    settings.update({key: soup[key] for key in SOUP_DEFAULTS if key in soup})
+    return settings
+
+
 def build_rust_config_json(config, sample_size=None):
     """Build the JSON string that alchemy.PyConfig.from_json reads.
 

@@ -131,9 +131,14 @@
                        class="btn btn-secondary">
                         <i></i> Download Final Soup JSON
                     </a>
+
+                    <a href="{{ url_for('download_config', config_id=experiment.config_id) }}"
+                       class="btn btn-secondary">
+                        <i></i> Download Config JSON
+                    </a>
                 </div>
                 <p class="text-muted small mt-3 mb-0">
-                    These JSON files contain metadata and molecular counts. You can re-upload either into the simulation form.
+                    The state files contain metadata and molecular counts. You can re-upload either into the simulation form. The config file is the full Modern-AlChemy config the experiment ran with.
                 </p>
             </div>
         </div>
@@ -971,6 +976,7 @@ if (experimentDropdown) {
 
         const initialDownloadLink = document.querySelector('a[href*="download_initial_state"]');
         const finalDownloadLink = document.querySelector('a[href*="download_final_state"]');
+        const configDownloadLink = document.querySelector('a[href*="download_config"]');
         const soupDownloadLink = document.getElementById('download-expressions-link');
 
         if (initialDownloadLink) {
@@ -978,6 +984,9 @@ if (experimentDropdown) {
         }
         if (finalDownloadLink) {
             finalDownloadLink.href = `/download_final_state/${experimentId}`;
+        }
+        if (configDownloadLink) {
+            configDownloadLink.href = `/download_config/${experimentId}`;
         }
         if (soupDownloadLink) {
             soupDownloadLink.href = `/download_current_expressions/${experimentId}`;

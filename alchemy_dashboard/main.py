@@ -29,7 +29,8 @@ Route overview:
                            /list_experiments, /api/final_state
   Import / export          /download_initial_state, /download_final_state,
                            /download_current_expressions,
-                           /download_initial_expressions, /upload_and_import,
+                           /download_initial_expressions, /download_config,
+                           /upload_and_import,
                            /upload_json, /generate_visuals
   Experiment management    /update_experiment_name, /delete_experiment,
                            /delete_all_experiments
@@ -405,6 +406,31 @@ def download_initial_state(config_id):
             mimetype="application/json",
             as_attachment=True,
             download_name=f"experiment_{config_id}_initial_state.json",
+        )
+    except Exception as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 500
+
+
+@app.route("/download_config/<int:config_id>")
+def download_config(config_id):
+    """Download the full JSON config the experiment ran with."""
+    try:
+        rust_config = get_rust_config(config_id)
+        if not rust_config:
+            return (
+                "No saved config for this experiment. It was run or imported "
+                "before configs were saved.",
+                404,
+            )
+
+        buffer = io.BytesIO()
+        buffer.write(json.dumps(json.loads(rust_config), indent=2).encode("utf-8"))
+        buffer.seek(0)
+        return send_file(
+            buffer,
+            mimetype="application/json",
+            as_attachment=True,
+            download_name=f"experiment_{config_id}_config.json",
         )
     except Exception as exc:
         return jsonify({"status": "error", "message": str(exc)}), 500

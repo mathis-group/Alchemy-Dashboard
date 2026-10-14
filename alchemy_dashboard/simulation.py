@@ -19,6 +19,7 @@ The starting population comes from a generator:
     "from_file"  a list of expressions supplied by the user
 """
 
+import json
 import os
 import alchemy
 import random
@@ -34,6 +35,114 @@ def _seed_hex(seed):
     if seed is None:
         return None
     return f"{int(seed) % (1 << 256):064x}"
+
+
+# Defaults for the reactor and soup settings, matching Modern-AlChemy dev
+# (src/config/reactors/untyped_lambda.rs and src/config/soup.rs). A value in
+# the dashboard config overrides each one.
+REACTOR_DEFAULTS = {
+    "rules": ["\\x.\\y.x y"],
+    "discard_copy_actions": True,
+    "discard_identity": True,
+    "discard_free_variable_expressions": True,
+    "reduction_cutoff": 500,
+    "size_cutoff": 500,
+}
+SOUP_DEFAULTS = {
+    # Not in the form: with discard_parents on, the soup can empty out and
+    # Modern-AlChemy panics ("cannot sample empty range").
+    "discard_parents": False,
+    "maintain_constant_population_size": True,
+}
+
+
+def build_rust_config_json(config, sample_size=None):
+    """Build the JSON string that alchemy.PyConfig.from_json reads.
+
+    This is the only place that knows the shape of Modern-AlChemy's config
+    (dev branch, default/config.json). If that shape changes, change it here.
+
+    Args:
+        config (dict): the dashboard config passed to run_experiment().
+        sample_size (int, optional): size of the starting population. Pass
+            the real count once the soup is filled; otherwise the number of
+            expressions the generator was asked for is used.
+
+    Returns:
+        str: the config as JSON.
+
+    Raises:
+        ValueError: if a value is missing or invalid. Rust panics on a bad
+            config instead of raising an error, so it is checked here first.
+    """
+    seed = _seed_hex(config.get("random_seed"))
+    if seed is None:
+        # A null seed makes Rust pick one we can never read back.
+        raise ValueError("random_seed is required")
+
+    generator_type = config["generator_type"]
+    if generator_type == "BTree":
+        standardization = config["standardization"].lower()
+        if standardization not in ("prefix", "postfix", "none"):
+            raise ValueError(f"Unknown standardization: {standardization}")
+        generator = {"BTree": {
+            "seed": seed,
+            "size": int(config["size"]),
+            "freevar_generation_probability": float(config["freevar_probability"]),
+            "n_max_free_vars": int(config["max_free_vars"]),
+            # The form sends "prefix"; the JSON wants "Prefix"
+            "standardization": standardization.capitalize(),
+        }}
+        requested = config.get("num_expressions", 10)
+    elif generator_type == "Fontana":
+        generator = {"Fontana": {
+            "seed": seed,
+            "min_depth": int(config.get("min_depth", 1)),
+            "max_depth": int(config["max_depth"]),
+            "abstraction_prob_range": [float(config["abs_low"]), float(config["abs_high"])],
+            "application_prob_range": [float(config["app_low"]), float(config["app_high"])],
+        }}
+        requested = config.get("initial_expression_count", 10)
+    elif generator_type == "from_file":
+        # Expressions come from the user, but the JSON still needs a
+        # generator. The soup stores it and never uses it to fill itself.
+        generator = {"BTree": {
+            "seed": seed,
+            "size": 20,
+            "freevar_generation_probability": 0.2,
+            "n_max_free_vars": 6,
+            "standardization": "Prefix",
+        }}
+        requested = len(config.get("expressions") or [])
+    else:
+        raise ValueError(f"Unknown generator type: {generator_type}")
+
+    reactor = {key: config.get(key, default) for key, default in REACTOR_DEFAULTS.items()}
+    soup = {key: config.get(key, default) for key, default in SOUP_DEFAULTS.items()}
+    soup["seed"] = seed
+
+    rust_config = {
+        "expression": {
+            "UntypedLambda": {
+                "generator": generator,
+                "reactor": reactor,
+            }
+        },
+        "run_limit": int(config["total_collisions"]),
+        "sample_size": int(sample_size if sample_size is not None else requested),
+        "polling_interval": int(config["polling_frequency"]),
+        "verbose_logging": False,
+        "soup_config": soup,
+        # The dashboard runs its own generations, one config each, so Rust's
+        # recursive settings stay at their single-generation defaults.
+        "recursive_config": {
+            "n_generations": 1,
+            "wipeout_percent": 0,
+            "refill_type": "ConfigGenerator",
+            "repopulation_expression": "\\x.\\y.x y",
+        },
+    }
+    return json.dumps(rust_config)
 
 
 def canonical_expression(expr):
@@ -292,7 +401,10 @@ def run_experiment(config):
         raise ValueError("No initial expressions available to start the simulation")
     
     # Initialize simulation: an empty soup, then add the starting population
-    simulation = alchemy.PySoup(seed=_seed_hex(config['random_seed']))
+    rust_config_json = build_rust_config_json(config, sample_size=len(initial_expressions))
+    print(rust_config_json) 
+    rust_config = alchemy.PyConfig.from_json(rust_config_json)
+    simulation = alchemy.PySoup.from_config(rust_config)
     simulation.perturb(initial_expressions)
 
     # The engine converts expressions to its canonical form and silently

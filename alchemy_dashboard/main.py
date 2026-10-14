@@ -1268,6 +1268,31 @@ def run_simulation_form():
         recursive_parent_id = request.form.get("recursive_parent_id")
         generator_type = request.form.get("generator_type", "Fontana")
 
+        # Reactor and soup settings from the fresh-simulation form. The
+        # recursive form has no such inputs, so recursive runs keep the
+        # defaults for now.
+        reactor_settings = {}
+        if not recursive_parent_id:
+            reactor_settings = {
+                "reduction_cutoff": int(request.form.get("reduction_cutoff", 500)),
+                "size_cutoff": int(request.form.get("size_cutoff", 500)),
+                # Yes/No dropdowns; a setting is on unless "no" is chosen.
+                "discard_copy_actions": request.form.get("discard_copy_actions", "yes") != "no",
+                "discard_identity": request.form.get("discard_identity", "yes") != "no",
+                "discard_free_variable_expressions": request.form.get("discard_free_variable_expressions", "yes") != "no",
+                "maintain_constant_population_size": request.form.get("maintain_constant_population_size", "yes") != "no",
+            }
+            if reactor_settings["reduction_cutoff"] < 1 or reactor_settings["size_cutoff"] < 1:
+                return (
+                    jsonify(
+                        {
+                            "status": "error",
+                            "message": "Reduction and size cutoffs must be at least 1.",
+                        }
+                    ),
+                    400,
+                )
+
         current_pool = None
         last_config_id = int(recursive_parent_id) if recursive_parent_id else None
 
@@ -1312,6 +1337,8 @@ def run_simulation_form():
                 "experiment_name": exp_name,
                 "expressions": current_pool,
             }
+
+            config.update(reactor_settings)
 
             # Apply parameters for Gen 1 if it is a FRESH start
             if gen == 0 and not recursive_parent_id:

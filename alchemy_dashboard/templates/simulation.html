@@ -26,7 +26,7 @@
                         <input type="hidden" name="num_generations" value="1">
 
                         <div class="form-group mb-3">
-                            <label class="form-label fw-bold">Experiment Name</label>
+                            <label class="form-label form-label-primary fw-bold">Experiment Name</label>
                             <input class="form-control" type="text" name="experiment_name" placeholder="e.g. Random Genesis">
                         </div>
                         <div class="row">
@@ -35,7 +35,7 @@
                             <div class="col-md-4 mb-3"><label class="form-label fw-bold">Random Seed</label><input class="form-control" type="number" name="random_seed" value="42"></div>
                         </div>
                         <div class="form-group mb-3">
-                            <label class="form-label fw-bold">Generator Type</label>
+                            <label class="form-label form-label-primary fw-bold">Generator Type</label>
                             <select class="form-select form-control" name="generator_type" id="generator-type">
                                 <option value="from_file">From File / Manual</option>
                                 <option value="BTree">BTree</option>
@@ -88,6 +88,64 @@
                             <div class="mb-2"><label class="form-label small">Upload File</label><input class="form-control form-control-sm" type="file" name="expressions_file" /></div>
                             <div><label class="form-label small">Or Enter Directly</label><textarea class="form-control form-control-sm" name="direct_input" rows="3" placeholder="One expression per line"></textarea></div>
                         </div>
+
+                        <details id="reactor-settings" class="p-3 bg-light rounded">
+                            <summary class="fw-bold form-label-primary mb-3">Advanced Settings</summary>
+
+                            <div class="mt-3">
+                                <label class="form-label small fw-bold">Discarded Results Settings</label>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="discard_copy_actions"
+                                        name="discard_copy_actions"
+                                        {% if reactor_defaults.discard_copy_actions %}checked{% endif %}>
+                                    <label class="form-check-label small" for="discard_copy_actions">
+                                        Discard copies of a parent (copy actions)</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="discard_identity"
+                                        name="discard_identity"
+                                        {% if reactor_defaults.discard_identity %}checked{% endif %}>
+                                    <label class="form-check-label small" for="discard_identity">
+                                        Discard the identity function (\x.x)</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="discard_free_variable_expressions"
+                                        name="discard_free_variable_expressions"
+                                        {% if reactor_defaults.discard_free_variable_expressions %}checked{% endif %}>
+                                    <label class="form-check-label small" for="discard_free_variable_expressions">
+                                        Discard expressions with free variables</label>
+                                </div>
+                            </div>
+
+                            <div class="form-check mt-3">
+                                <input class="form-check-input" type="checkbox" id="maintain_constant_population_size"
+                                    name="maintain_constant_population_size"
+                                    {% if soup_defaults.maintain_constant_population_size %}checked{% endif %}>
+                                <label class="form-check-label small" for="maintain_constant_population_size">
+                                    Keep population size constant</label>
+                            </div>
+
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="discard_parents"
+                                    name="discard_parents"
+                                    {% if soup_defaults.discard_parents %}checked{% endif %}>
+                                <label class="form-check-label small" for="discard_parents">
+                                    Remove parents after each collision</label>
+                            </div>
+
+                            <div class="row mt-3">
+                                <div class="col-md-6">
+                                    <label class="form-label small">Reduction Cutoff</label>
+                                    <input class="form-control form-control-sm" type="number" name="reduction_cutoff"
+                                        min="1" value="{{ reactor_defaults.reduction_cutoff }}">
+                                </div>
+                                <div class="col-md-6">
+                                    <label class="form-label small">Size Cutoff</label>
+                                    <input class="form-control form-control-sm" type="number" name="size_cutoff"
+                                        min="1" value="{{ reactor_defaults.size_cutoff }}">
+                                </div>
+                            </div>
+                        </details>
 
                         <button type="submit" class="btn btn-success w-100 fw-bold"><i class="fas fa-play"></i> RUN FRESH SIMULATION</button>
                     </form>

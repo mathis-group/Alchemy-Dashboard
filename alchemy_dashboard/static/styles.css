@@ -1611,11 +1611,15 @@
     margin-top: 0.5rem !important;
 }
 
+#fresh-form .form-label-primary {
+  font-size: 1.1rem !important;
+  font-weight: 600 !important;
+}
 
 /* Better spacing between labels and inputs in simulation form */
 #fresh-form .form-label,
 #recursive-form .form-label {
-    margin-bottom: 0.5rem !important;
+    margin-bottom: 0.25rem !important;
 }
 
 /* Ensure consistent spacing for all form fields */
@@ -1624,17 +1628,46 @@
 #fresh-form .form-group,
 #recursive-form .mb-3,
 #recursive-form .form-group {
-    margin-bottom: 1.25rem !important;
+    margin-bottom: 1.5rem !important;
 }
 
 #fontana-options .form-label,
 #btree-options .form-label,
-#from-file-options .form-label {
-    margin-bottom: 0.35rem !important;
+#from-file-options .form-label,
+#reactor-settings .form-label {
+    margin-bottom: 0.25rem !important;
 }
 
 #fontana-options .form-control,
 #btree-options .form-control,
-#from-file-options .form-control {
-    margin-top: 0 !important;
+#from-file-options .form-control,
+#reactor-settings .form-control {
+    margin-top: 0.25rem !important;
+}
+
+#fontana-options .row > div,
+#btree-options .row > div,
+#reactor-settings .row > div {
+    margin-bottom: 1rem;
+}
+
+#reactor-settings summary {
+    text-transform: uppercase;
+}
+
+#reactor-settings .form-check {
+    margin-bottom: 0.75rem !important;
+    padding-left: 0.50rem !important;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+#reactor-settings input[type="checkbox"] {
+  appearance: auto !important;
+  -webkit-appearance: auto !important;
+  width: 1rem !important;
+  height: 1rem !important;
+  position: static !important;
+  opacity: 1 !important;
 }

@@ -34,6 +34,7 @@ import re
 from dataclasses import dataclass, field
 from typing import Union, List, Optional, Dict, Any
 from enum import Enum
+from bokeh.palettes import Muted8
 import json
 
 #3 different node types
@@ -296,16 +297,17 @@ def getColors(node: Optional[ASTNode]) -> Dict[str, str]:
    if node:
        collect_var(node)
   
-   colors = [
-       "blue",
-        "red",
-        "green",
-        "orange",
-        "purple",
-        "teal",
-        "pink",
-        "brown"
-   ]
+#    colors = [
+#        "blue",
+#         "red",
+#         "green",
+#         "orange",
+#         "purple",
+#         "teal",
+#         "pink",
+#         "brown"
+#    ]
+   colors = Muted8
   
    color_map = {}
    sorted_var = sorted(list(variables)) 

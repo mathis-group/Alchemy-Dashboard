@@ -49,8 +49,8 @@ REACTOR_DEFAULTS = {
     "size_cutoff": 500,
 }
 SOUP_DEFAULTS = {
-    # Not in the form: with discard_parents on, the soup can empty out and
-    # Modern-AlChemy panics ("cannot sample empty range").
+    # With discard_parents on, Modern-AlChemy replaces the two parents with
+    # two new expressions from the config's generator.
     "discard_parents": False,
     "maintain_constant_population_size": True,
 }
@@ -67,16 +67,19 @@ def settings_from_rust_config(rust_config_json):
 
     Returns:
         dict: the REACTOR_DEFAULTS and SOUP_DEFAULTS keys found in the
-            config. Empty for experiments saved before configs were stored,
-            so those children use the defaults.
+            config, plus "parent_generator" (the parent's generator block).
+            Empty for experiments saved before configs were stored, so those
+            children use the defaults.
     """
     if not rust_config_json:
         return {}
     rust_config = json.loads(rust_config_json)
-    reactor = rust_config["expression"]["UntypedLambda"]["reactor"]
+    expression = rust_config["expression"]["UntypedLambda"]
+    reactor = expression["reactor"]
     soup = rust_config["soup_config"]
     settings = {key: reactor[key] for key in REACTOR_DEFAULTS if key in reactor}
     settings.update({key: soup[key] for key in SOUP_DEFAULTS if key in soup})
+    settings["parent_generator"] = expression["generator"]
     return settings
 
 
@@ -128,15 +131,23 @@ def build_rust_config_json(config, sample_size=None):
         }}
         requested = config.get("initial_expression_count", 10)
     elif generator_type == "from_file":
-        # Expressions come from the user, but the JSON still needs a
-        # generator. The soup stores it and never uses it to fill itself.
-        generator = {"BTree": {
-            "seed": seed,
-            "size": 20,
-            "freevar_generation_probability": 0.2,
-            "n_max_free_vars": 6,
-            "standardization": "Prefix",
-        }}
+        # The starting expressions are given, but the generator still makes
+        # replacements when discard_parents is on. A child run reuses its
+        # parent's generator (with this run's seed) so replacements match
+        # the parent's settings. Uploads and children of experiments saved
+        # before configs were stored fall back to a fixed BTree generator.
+        parent_generator = config.get("parent_generator")
+        if parent_generator:
+            (kind, params), = parent_generator.items()
+            generator = {kind: {**params, "seed": seed}}
+        else:
+            generator = {"BTree": {
+                "seed": seed,
+                "size": 20,
+                "freevar_generation_probability": 0.2,
+                "n_max_free_vars": 6,
+                "standardization": "Prefix",
+            }}
         requested = len(config.get("expressions") or [])
     else:
         raise ValueError(f"Unknown generator type: {generator_type}")

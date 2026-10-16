@@ -83,6 +83,94 @@ def settings_from_rust_config(rust_config_json):
     return settings
 
 
+def form_values_from_rust_config(rust_config):
+    """Turn an uploaded config into values for the Run Simulation form.
+
+    Accepts the files from Download Config JSON and Modern-AlChemy's own
+    config files. The config does not include starting expressions, so
+    this only fills the form for a fresh BTree or Fontana run.
+
+    Args:
+        rust_config (dict): the parsed config.
+
+    Returns:
+        tuple: (values, warnings)
+            values: dict of form field name -> value
+            warnings: list of str, for settings that could not be loaded
+
+    Raises:
+        ValueError: if the config is missing a section or has a setting the
+            dashboard cannot run with.
+    """
+    try:
+        expression = rust_config["expression"]["UntypedLambda"]
+        generator = expression["generator"]
+        reactor = expression["reactor"]
+        soup = rust_config["soup_config"]
+    except (KeyError, TypeError):
+        raise ValueError("Not a Modern-AlChemy config: expected expression.UntypedLambda "
+                         "with generator and reactor, and soup_config")
+
+    if reactor.get("rules", REACTOR_DEFAULTS["rules"]) != REACTOR_DEFAULTS["rules"]:
+        raise ValueError(f"The dashboard only runs the rule {REACTOR_DEFAULTS['rules'][0]}")
+
+    values = {}
+    warnings = []
+
+    if rust_config.get("run_limit") is not None:
+        values["total_collisions"] = int(rust_config["run_limit"])
+    if rust_config.get("polling_interval") is not None:
+        values["polling_frequency"] = int(rust_config["polling_interval"])
+    else:
+        warnings.append("No polling_interval in the file; kept the form's value.")
+    if soup.get("seed") is not None:
+        # Saved as 64 hex characters (see _seed_hex)
+        values["random_seed"] = int(soup["seed"], 16)
+    else:
+        warnings.append("No seed in the file; kept the form's value.")
+
+    sample_size = rust_config.get("sample_size")
+    if "BTree" in generator:
+        params = generator["BTree"]
+        values.update({
+            "generator_type": "BTree",
+            "btree_size": int(params["size"]),
+            "freevar_probability": float(params["freevar_generation_probability"]),
+            "max_free_vars": int(params["n_max_free_vars"]),
+            "standardization": str(params["standardization"]).lower(),
+        })
+        if sample_size is not None:
+            values["num_expressions"] = int(sample_size)
+    elif "Fontana" in generator:
+        params = generator["Fontana"]
+        values.update({
+            "generator_type": "Fontana",
+            "abs_low": float(params["abstraction_prob_range"][0]),
+            "abs_high": float(params["abstraction_prob_range"][1]),
+            "app_low": float(params["application_prob_range"][0]),
+            "app_high": float(params["application_prob_range"][1]),
+            "min_depth": int(params.get("min_depth", 1)),
+            "max_depth": int(params["max_depth"]),
+        })
+        if sample_size is not None:
+            values["fontana_expression_count"] = int(sample_size)
+    else:
+        raise ValueError(f"Unknown generator: {', '.join(generator) or 'none'}")
+
+    for key in REACTOR_DEFAULTS:
+        if key != "rules" and key in reactor:
+            values[key] = reactor[key]
+    for key in SOUP_DEFAULTS:
+        if key in soup:
+            values[key] = soup[key]
+
+    recursive = rust_config.get("recursive_config") or {}
+    if recursive.get("n_generations", 1) != 1:
+        warnings.append("recursive_config was ignored; use Recursive Simulation for generations.")
+
+    return values, warnings
+
+
 def build_rust_config_json(config, sample_size=None):
     """Build the JSON string that alchemy.PyConfig.from_json reads.
 

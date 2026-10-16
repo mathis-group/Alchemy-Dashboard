@@ -30,7 +30,7 @@ Route overview:
   Import / export          /download_initial_state, /download_final_state,
                            /download_current_expressions,
                            /download_initial_expressions, /download_config,
-                           /upload_and_import,
+                           /load_config, /upload_and_import,
                            /upload_json, /generate_visuals
   Experiment management    /update_experiment_name, /delete_experiment,
                            /delete_all_experiments
@@ -56,6 +56,7 @@ from .simulation import (
   run_experiment,
   canonical_expression,
   settings_from_rust_config,
+  form_values_from_rust_config,
   REACTOR_DEFAULTS,
   SOUP_DEFAULTS,
 )
@@ -445,6 +446,32 @@ def download_config(config_id):
         )
     except Exception as exc:
         return jsonify({"status": "error", "message": str(exc)}), 500
+
+
+@app.route("/load_config", methods=["POST"])
+def load_config():
+    """Read an uploaded config JSON and return values for the simulation form.
+
+    Form data:
+        config_file: a file from Download Config JSON, or a Modern-AlChemy
+            config file.
+
+    Returns: JSON {"status", "values", "warnings"}, or {"status", "message"}
+    with 400 if the file can't be used. Nothing is run or saved.
+    """
+    file = request.files.get("config_file")
+    if not file or not file.filename:
+        return jsonify({"status": "error", "message": "No file uploaded."}), 400
+    try:
+        rust_config = json.loads(file.read().decode("utf-8"))
+        values, warnings = form_values_from_rust_config(rust_config)
+    except json.JSONDecodeError as exc:
+        return jsonify({"status": "error", "message": f"Not valid JSON: {exc}"}), 400
+    except KeyError as exc:
+        return jsonify({"status": "error", "message": f"Missing setting in config: {exc}"}), 400
+    except (ValueError, TypeError, IndexError) as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+    return jsonify({"status": "success", "values": values, "warnings": warnings})
 
 
 @app.route("/download_final_state/<int:config_id>")

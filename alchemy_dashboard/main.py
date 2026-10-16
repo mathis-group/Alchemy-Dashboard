@@ -52,7 +52,13 @@ from werkzeug.utils import secure_filename
 import sqlite3
 from .config import DB_NAME
 
-from .simulation import run_experiment, canonical_expression, settings_from_rust_config
+from .simulation import (
+  run_experiment,
+  canonical_expression,
+  settings_from_rust_config,
+  REACTOR_DEFAULTS,
+  SOUP_DEFAULTS,
+)
 from .plotting import (
     get_simulation_components,
     plot_experiment_metrics,
@@ -151,7 +157,12 @@ def index():
 @app.route("/simulation")
 def simulation():
     """Page with the form for configuring and running a new simulation."""
-    return render_template("simulation.html", active_page="simulation")
+    return render_template(
+        "simulation.html",
+        active_page="simulation",
+        reactor_defaults=REACTOR_DEFAULTS,
+        soup_defaults=SOUP_DEFAULTS,
+    )
 
 
 @app.route("/database")
@@ -1281,6 +1292,9 @@ def run_simulation_form():
         generator_type (str): "Fontana", "BTree", or "from_file"
         plus generator-specific fields (see the BTree / Fontana sections),
         or expressions_file / direct_input when generator_type is "from_file"
+        plus reactor settings (discard_copy_actions, discard_identity,
+        discard_free_variable_expressions, maintain_constant_population_size,
+        reduction_cutoff, size_cutoff)
 
     Returns: JSON {"status", "config_id", "experiment_name", "message"} for
     the last generation that ran.
@@ -1297,6 +1311,21 @@ def run_simulation_form():
 
         recursive_parent_id = request.form.get("recursive_parent_id")
         generator_type = request.form.get("generator_type", "Fontana")
+
+        reactor_settings = {
+            "discard_copy_actions": "discard_copy_actions" in request.form,
+            "discard_identity": "discard_identity" in request.form,
+            "discard_free_variable_expressions": "discard_free_variable_expressions" in request.form,
+            "maintain_constant_population_size": "maintain_constant_population_size" in request.form,
+            "discard_parents": "discard_parents" in request.form,
+        }
+
+        for key in ("reduction_cutoff", "size_cutoff"):
+            raw = request.form.get(key, "").strip()
+            value = int(raw) if raw else REACTOR_DEFAULTS[key]
+            if value < 1:
+                return jsonify({"status": "error", "message": f"{key} must be at least 1"}), 400
+            reactor_settings[key] = value
 
         current_pool = None
         last_config_id = int(recursive_parent_id) if recursive_parent_id else None
@@ -1349,6 +1378,7 @@ def run_simulation_form():
 
             # Apply parameters for Gen 1 if it is a FRESH start
             if gen == 0 and not recursive_parent_id:
+                config.update(reactor_settings)
                 if generator_type == "from_file":
                     # Check for uploaded file
                     if (

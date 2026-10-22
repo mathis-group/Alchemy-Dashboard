@@ -114,6 +114,10 @@ def stored_generator_params(config):
 
     Reads the saved JSON and adds freevar_probability from its own column if
     it is not already there. Nothing is filled in that was not saved.
+
+    Child runs (generator "from_file") save no generator settings of their
+    own, so theirs are read from the saved config: the generator they
+    inherited from their parent.
     """
     try:
         params = json.loads(config[5]) if config[5] else {}
@@ -123,6 +127,32 @@ def stored_generator_params(config):
         params = {}
     if config[6] is not None:
         params.setdefault("freevar_probability", config[6])
+    if not params and config[2] == "from_file":
+        params = inherited_generator_params(config[0])
+    return params
+
+
+def inherited_generator_params(config_id):
+    """Generator settings from a child run's saved config, keyed like a fresh run's.
+
+    Returns {} for experiments saved before configs were stored.
+    """
+    rust_config_json = get_rust_config(config_id)
+    if not rust_config_json:
+        return {}
+    try:
+        values, _ = form_values_from_rust_config(json.loads(rust_config_json))
+    except (ValueError, KeyError, TypeError):
+        return {}
+    generator_type = values["generator_type"]
+    # The form's names for these differ from the saved ones
+    values["size"] = values.get("btree_size")
+    # The starting soup came from the parent, not the generator, so its
+    # expression count is left out
+    keys = [key for key in GENERATOR_PARAM_KEYS[generator_type]
+            if key not in ("num_expressions", "initial_expression_count")]
+    params = {"generator": generator_type}
+    params.update({key: values[key] for key in keys if values.get(key) is not None})
     return params
 
 app = Flask(__name__)

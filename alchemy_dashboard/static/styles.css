@@ -428,7 +428,6 @@
     }
     
     .chart-container::before {
-      content: "Chart Visualization";
       position: absolute;
       top: 50%;
       left: 50%;
@@ -1451,7 +1450,7 @@
     /* ast visualization*/
     #ast-visualization-container {
     min-height: 400px;
-    border: 1px solid #e2e8f0;
+    border: 1px solid white;
     border-radius: 8px;
     background-color: white;
     position: relative;

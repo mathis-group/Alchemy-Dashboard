@@ -34,6 +34,7 @@ import matplotlib.pyplot as plt
 from sklearn.manifold import MDS
 # New imports for non-overlapping AST
 import networkx as nx
+import igraph as ig
 from collections import defaultdict
 
 # Define colors using CSS variables.
@@ -595,7 +596,7 @@ def ASTvisualizer(expression):
             """Add `node` and all its children to G; returns the node's ID.
 
             Node colors: variables and lambdas use their variable's color
-            (yellow/green if none); anything else (e.g. applications) is red.
+            (yellow/green if none); anything else (e.g. applications) is gray.
             """
             node_id = len(G) # Guarantees unique ID based on current length
 
@@ -604,7 +605,7 @@ def ASTvisualizer(expression):
             elif isinstance(node, LambdaNode):
                 node_color = colors.get(node.var, "green")
             else:
-                node_color = "red"
+                node_color = "gray"
 
             # Add current node
             node_name = getattr(node, 'name', None) or getattr(node, 'var', None) or str(node)
@@ -620,27 +621,17 @@ def ASTvisualizer(expression):
 
         build_graph(Atree)
 
-        # Calculate coordinates based on depth level, preventing overlap
-        levels = defaultdict(list)
-        for n, data in G.nodes(data=True):
-            levels[data['depth']].append(n) # Add nodes to each level
+        # Reingold-Tilford Algorithm
+        ig_graph = ig.Graph(n=len(G), edges=list(G.edges()), directed=True)
+        layout = ig_graph.layout_reingold_tilford(root=[0], mode='out')
 
-        pos = {}
         y_spacing = 2.0
         x_spacing = 2.0
-
-        # Each row is centered on x = 0: e.g. 3 nodes go at x = -2, 0, 2
-        for depth, nodes_in_level in levels.items():
-            total_nodes = len(nodes_in_level)
-            for idx, node_id in enumerate(nodes_in_level):
-                x = (idx - (total_nodes - 1) / 2.0) * x_spacing
-                y = -depth * y_spacing
-                pos[node_id] = (x, y)
+        pos = {i: (x * x_spacing, -y * y_spacing) for i, (x, y) in enumerate(layout)}
 
         # Bokeh figure
         p = create_styled_figure(
-            f"AST: {expression}", "", "",
-            width=800, height=450
+            f'{expression}', "", "", width=800, height=450
         )
 
         # Draw Edges
@@ -656,18 +647,23 @@ def ASTvisualizer(expression):
         nodeColors = [G.nodes[n]['color'] for n in G.nodes()]
 
         # Plot
-        p.scatter(nodeXn, nodeYn, size=25, color=nodeColors, line_color=TEXT_COLOR, line_width=1, alpha=0.8)
+        p.scatter(nodeXn, nodeYn, size=32, color=nodeColors, line_color=TEXT_COLOR, line_width=1, alpha=1)
 
         make_annotations = ColumnDataSource(data={'x': nodeXn, 'y': nodeYn, 'text': nodeNames})
         annotations = LabelSet(
             x='x', y='y', text='text', source=make_annotations,
             text_color='white', text_align='center', text_baseline='middle',
-            text_font_style='bold', text_font_size='11px'
+            text_font_style='bold', text_font_size='12px'
         )
         p.add_layout(annotations)
 
         p.background_fill_color = "#FFFFFF"
         p.border_fill_color = "#FFFFFF"
+        # X and Y axis don't mean anything for this graph
+        p.axis.visible = False
+        p.grid.grid_line_color = None
+        p.outline_line_color = None
+        p.title = None
 
         return p
         

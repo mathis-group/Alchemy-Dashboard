@@ -44,7 +44,6 @@ import io
 from random import random
 import random
 import re
-from collections import Counter
 from flask import Flask, render_template, request, redirect, url_for, jsonify, send_file
 from bokeh.resources import CDN
 from bokeh.embed import components, json_item
@@ -72,6 +71,7 @@ from .models import (
     save_configuration,
     save_experiment_state,
     save_averages,
+    save_run_metrics,
     get_experiment_configs,
     save_continuation_metadata,
     get_continuation_metadata,
@@ -1256,19 +1256,7 @@ def trigger_extinction():
             f"Experiment #{new_id}: Extinction ({mode_label}) - Removed: {short_target}",
         )
 
-        metrics = result.get("metrics", [])
-        for metric in metrics:
-            save_averages(
-                new_id,
-                metric["collision_number"],
-                metric["entropy"],
-                metric["unique_expressions"],
-            )
-            if "expressions" in metric:
-                for expr, count in Counter(metric["expressions"]).items():
-                    save_experiment_state(
-                        new_id, metric["collision_number"], expr, count
-                    )
+        save_run_metrics(new_id, result.get("metrics", []))
 
         save_continuation_metadata(new_id, parent_id, 1.0, len(survivor_pool), 0)
 
@@ -1590,18 +1578,7 @@ def run_simulation_form():
             initial_expressions = result.get("initial_expressions", [])
 
             metrics = result.get("metrics", [])
-            for metric in metrics:
-                save_averages(
-                    new_id,
-                    metric["collision_number"],
-                    metric["entropy"],
-                    metric["unique_expressions"],
-                )
-                if "expressions" in metric:
-                    for expr, count in Counter(metric["expressions"]).items():
-                        save_experiment_state(
-                            new_id, metric["collision_number"], expr, count
-                        )
+            save_run_metrics(new_id, metrics)
 
             # Link Lineage
             if last_config_id:
@@ -1735,19 +1712,7 @@ def trigger_invasive_species():
             rust_config=result["rust_config"],
         )
 
-        metrics = result.get("metrics", [])
-        for metric in metrics:
-            save_averages(
-                new_id,
-                metric["collision_number"],
-                metric["entropy"],
-                metric["unique_expressions"],
-            )
-            if "expressions" in metric:
-                for expr, count in Counter(metric["expressions"]).items():
-                    save_experiment_state(
-                        new_id, metric["collision_number"], expr, count
-                    )
+        save_run_metrics(new_id, result.get("metrics", []))
 
         save_continuation_metadata(
             new_id,

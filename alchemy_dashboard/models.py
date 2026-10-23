@@ -22,6 +22,7 @@ Tables (created by init_database):
 import sqlite3
 import json
 import os
+from collections import Counter
 from datetime import datetime
 from .config import DB_NAME
 
@@ -302,6 +303,51 @@ def save_averages(config_id, collision_number, entropy, unique_expressions):
 
     conn.commit()
     conn.close()
+
+
+def save_run_metrics(config_id, metrics):
+    """
+    Save every snapshot of a run in one transaction.
+
+    Does the same as calling save_averages() and save_experiment_state() for
+    each snapshot, but commits once instead of once per row, which takes
+    seconds instead of minutes for large soups.
+
+    Args:
+        config_id (int): ID of the configuration
+        metrics (list): snapshots from run_experiment(), each with
+            collision_number, entropy, unique_expressions and optionally
+            expressions (the full population, one entry per copy)
+    """
+    averages = []
+    states = []
+    for metric in metrics:
+        averages.append((
+            config_id,
+            metric["collision_number"],
+            metric["entropy"],
+            metric["unique_expressions"],
+        ))
+        for expression, count in Counter(metric.get("expressions", [])).items():
+            states.append((config_id, metric["collision_number"], expression, count))
+
+    conn = sqlite3.connect(DB_NAME)
+    try:
+        with conn:
+            conn.executemany('''
+            INSERT INTO Averages
+            (config_id, collision_number, entropy, unique_expressions)
+            VALUES (?, ?, ?, ?)
+            ''', averages)
+            conn.executemany('''
+            INSERT INTO Experiment
+            (config_id, collision_number, expression, count)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT (config_id, collision_number, expression)
+            DO UPDATE SET count = excluded.count
+            ''', states)
+    finally:
+        conn.close()
 
 
 def save_continuation_metadata(child_config_id, parent_config_id, fraction_used, reused_expression_count, additional_expression_count):

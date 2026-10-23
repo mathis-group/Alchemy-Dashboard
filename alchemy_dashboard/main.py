@@ -44,6 +44,7 @@ import io
 from random import random
 import random
 import re
+import time
 from flask import Flask, render_template, request, redirect, url_for, jsonify, send_file
 from bokeh.resources import CDN
 from bokeh.embed import components, json_item
@@ -94,6 +95,7 @@ from .ASTGen import LambdaParser, VariableNode, LambdaNode, getColors
 #   [5] probability_range  (JSON string of generator params)
 #   [6] freevar_probability                        [7] timestamp
 #   [8] name               (may be None; falls back to "Experiment <id>")
+#   [9] run_seconds        (how long the simulation took; None for older runs)
 
 # Generator settings that are actually passed to each generator. Only these
 # are saved, so the stored values describe what was really run.
@@ -130,6 +132,12 @@ def stored_generator_params(config):
     if not params and config[2] == "from_file":
         params = inherited_generator_params(config[0])
     return params
+
+
+def format_run_time(config):
+    """How long a CONFIG ROW's simulation took, e.g. "13.4 s", or "—" if not recorded."""
+    run_seconds = config[9] if len(config) > 9 else None
+    return f"{run_seconds:.1f} s" if run_seconds is not None else "—"
 
 
 def inherited_generator_params(config_id):
@@ -261,6 +269,7 @@ def database_view():
         "generator_type": config[2],
         "total_collisions": config[3],
         "polling_frequency": config[4],
+        "run_time": format_run_time(config),
         "timestamp": config[7],
         "generator_params": stored_params,
         "continuation": continuation_meta,
@@ -837,6 +846,7 @@ def view_experiment(config_id):
         "total_collisions": config[3],
         "polling_frequency": config[4],
         "generator_params": stored_generator_params(config),
+        "run_time": format_run_time(config),
         "timestamp": config[7],
         "name": config[8] or f"Experiment {config_id}",
     }
@@ -1039,6 +1049,7 @@ def get_experiment_metadata(config_id):
                     "total_collisions": config[3],
                     "polling_frequency": config[4],
                     "generator_params": generator_params,
+                    "run_time": format_run_time(config),
                     "timestamp": config[7],
                     "name": config[8] or f"Experiment {config[0]}",
                     "continuation": get_continuation_metadata(config_id),
@@ -1237,7 +1248,9 @@ def trigger_extinction():
         }
         # Keep the parent's reactor and soup settings
         config.update(settings_from_rust_config(get_rust_config(parent_id)))
+        start = time.perf_counter()
         result = run_experiment(config)
+        run_seconds = time.perf_counter() - start
 
         new_id = save_configuration(
             random_seed=config["random_seed"],
@@ -1249,6 +1262,7 @@ def trigger_extinction():
             ),
             name=temp_name,
             rust_config=result["rust_config"],
+            run_seconds=run_seconds,
         )
 
         update_experiment_name(
@@ -1401,6 +1415,8 @@ def run_simulation_form():
 
             generator_type = "from_file"
 
+        total_seconds = 0.0
+
         # --- MULTI-GENERATION LOOP ---
         for gen in range(num_generations):
             gen_idx = gen + 1
@@ -1552,7 +1568,10 @@ def run_simulation_form():
                     )
 
             # Fire Engine
+            start = time.perf_counter()
             result = run_experiment(config)
+            run_seconds = time.perf_counter() - start
+            total_seconds += run_seconds
 
             # Validate engine output
             if not result or "metrics" not in result:
@@ -1570,6 +1589,7 @@ def run_simulation_form():
                 freevar_generation_probability=config.get("freevar_probability"),
                 name=exp_name,
                 rust_config=result["rust_config"],
+                run_seconds=run_seconds,
             )
 
             # Save population/metrics
@@ -1607,7 +1627,7 @@ def run_simulation_form():
                 "status": "success",
                 "config_id": last_config_id,
                 "experiment_name": exp_name,
-                "message": f"Successfully ran {num_generations} generation(s).",
+                "message": f"Successfully ran {num_generations} generation(s) in {total_seconds:.1f} s.",
             }
         )
 
@@ -1702,7 +1722,9 @@ def trigger_invasive_species():
         # Keep the parent's reactor and soup settings
         config.update(settings_from_rust_config(get_rust_config(parent_config_id)))
 
+        start = time.perf_counter()
         result = run_experiment(config)
+        run_seconds = time.perf_counter() - start
         new_id = save_configuration(
             random_seed=parent_config[1],
             generator_type="from_file",
@@ -1710,6 +1732,7 @@ def trigger_invasive_species():
             polling_frequency=10,
             name=config["experiment_name"],
             rust_config=result["rust_config"],
+            run_seconds=run_seconds,
         )
 
         save_run_metrics(new_id, result.get("metrics", []))

@@ -87,6 +87,7 @@ def get_experiment_details(config_id):
                 [5] probability_range (JSON string)
                 [6] freevar_generation_probability
                 [7] timestamp          [8] name
+                [9] run_seconds (None for experiments saved before it existed)
             metrics: list of (collision_number, entropy, unique_expressions),
                 in collision order
             initial_expressions: list of (expression, count) at collision 0,
@@ -100,7 +101,7 @@ def get_experiment_details(config_id):
     cursor.execute('''
         SELECT config_id, random_seed, generator_type, total_collisions, 
                polling_frequency, probability_range, freevar_generation_probability, 
-               timestamp, name
+               timestamp, name, run_seconds
         FROM Configurations WHERE config_id = ?
     ''', (config_id,))
     config = cursor.fetchone()

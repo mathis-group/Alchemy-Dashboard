@@ -75,6 +75,10 @@
                     <span class="detail-value" id="polling-frequency-value">{{ experiment.polling_frequency }}</span>
                 </div>
                 <div class="detail-row">
+                    <span class="detail-label">Run Time:</span>
+                    <span class="detail-value" id="run-time-value">{{ experiment.run_time or "—" }}</span>
+                </div>
+                <div class="detail-row">
                     <span class="detail-label">Timestamp:</span>
                     <span class="detail-value" id="timestamp-value">{{ experiment.timestamp }}</span>
                 </div>
@@ -1012,6 +1016,10 @@ if (experimentDropdown) {
                     const pollingFrequencySpan = document.getElementById('polling-frequency-value');
                     if (pollingFrequencySpan) {
                         pollingFrequencySpan.textContent = details.polling_frequency;
+                    }
+                    const runTimeSpan = document.getElementById('run-time-value');
+                    if (runTimeSpan) {
+                        runTimeSpan.textContent = details.run_time || "—";
                     }
                     const timestampSpan = document.getElementById('timestamp-value');
                     if (timestampSpan) {

@@ -1,0 +1,3 @@
+# Opt-in review dependency for Modern-AlChemy #31. Not used by normal uv sync.
+# This is an unmerged contributor commit, not an upstream release.
+alchemy @ git+https://github.com/1932819331hy-debug/Modern-AlChemy.git@cf852e9dbd26ea0d03cfbff7ec0b011128ac8c9c

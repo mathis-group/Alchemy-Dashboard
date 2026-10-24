@@ -6,33 +6,44 @@
 <div class="simulation-content-area">
     <div class="simulation-config">
         <div class="card shadow-sm">
-            <div class="card-header p-0 bg-dark text-white d-flex align-items-center justify-content-start">
-
-                <div id="tab-fresh" class="py-3 px-4" onclick="switchTab('fresh')" style="cursor: pointer; background-color: rgba(255,255,255,0.1); opacity: 1; font-weight: bold;">
-                    <i></i> Fresh Simulation
-                </div>
-
-                <div style="width: 2px; height: 25px; background-color: rgba(255,255,255,0.3);"></div>
-
-                <div id="tab-recursive" class="py-3 px-4 text-warning" onclick="switchTab('recursive')" style="cursor: pointer; opacity: 0.5; font-weight: normal;">
-                    <i"></i> Recursive Simulation
-                </div>
-
+            <div class="card-header bg-dark text-white">
+                <h3 class="card-title">Run Simulation</h3>
             </div>
 
             <div class="card-body">
-                <div id="content-fresh">
-                    <form id="fresh-form" action="/run_simulation_form" method="POST" enctype="multipart/form-data">
-                        <input type="hidden" name="num_generations" value="1">
-
+                <form id="fresh-form" action="/run_simulation_form" method="POST" enctype="multipart/form-data">
+                    <div class="form-group mb-3">
+                        <label class="form-label fw-bold" for="recursive-parent-id">Seed from previous experiment (optional)</label>
+                        <select class="form-select form-control" name="recursive_parent_id" id="recursive-parent-id" aria-describedby="parent-help parent-load-status">
+                            <option value="">Start with a new population</option>
+                        </select>
+                        <div id="parent-help" class="form-text small">A previous experiment supplies its final population and random seed. Otherwise, configure a new population below.</div>
+                        <div id="parent-load-status" class="form-text small" role="status">Loading previous experiments...</div>
+                    </div>
+                    <div class="form-group mb-3">
+                        <label class="form-label fw-bold">Experiment Name</label>
+                        <input class="form-control" type="text" name="experiment_name" placeholder="e.g. Random Genesis">
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4 mb-3"><label class="form-label fw-bold">Collisions</label><input class="form-control" type="number" name="total_collisions" value="1000"></div>
+                        <div class="col-md-4 mb-3"><label class="form-label fw-bold">Polling</label><input class="form-control" type="number" name="polling_frequency" value="10"></div>
+                        <div class="col-md-4 mb-3"><label class="form-label fw-bold" for="num-generations">Generations</label><input class="form-control" type="number" name="num_generations" id="num-generations" value="1" min="1" required></div>
+                    </div>
+                    <div class="form-group mb-3">
+                        <label class="form-label fw-bold" for="wipeout-percent">Wipeout between generations (%)</label>
+                        <input class="form-control" type="number" name="wipeout_percent" id="wipeout-percent" value="0" min="0" max="100" step="1" required>
+                        <div class="form-text small">Rust removes this percentage (rounded down) and refills before the next generation. Fresh generated runs reuse the selected generator.</div>
+                    </div>
+                    <div id="refill-options" class="form-group mb-3" hidden>
+                        <label class="form-label fw-bold" for="refill-expression">Refill expression for parent/manual populations</label>
+                        <input class="form-control" type="text" name="repopulation_expression" id="refill-expression" placeholder="Example: \x.\y.x y" disabled>
+                        <div class="form-text small">Required when wipeout is nonzero for a parent or supplied population. Each removed expression is replaced by a copy of your chosen expression; no example is applied automatically.</div>
+                    </div>
+                    <fieldset id="fresh-options" style="border: 0; padding: 0; margin: 0; min-width: 0;">
+                        <legend class="form-label fw-bold">Initial population</legend>
                         <div class="form-group mb-3">
-                            <label class="form-label fw-bold">Experiment Name</label>
-                            <input class="form-control" type="text" name="experiment_name" placeholder="e.g. Random Genesis">
-                        </div>
-                        <div class="row">
-                            <div class="col-md-4 mb-3"><label class="form-label fw-bold">Collisions</label><input class="form-control" type="number" name="total_collisions" value="1000"></div>
-                            <div class="col-md-4 mb-3"><label class="form-label fw-bold">Polling</label><input class="form-control" type="number" name="polling_frequency" value="10"></div>
-                            <div class="col-md-4 mb-3"><label class="form-label fw-bold">Random Seed</label><input class="form-control" type="number" name="random_seed" value="42"></div>
+                            <label class="form-label fw-bold" for="random-seed">Random Seed</label>
+                            <input class="form-control" type="number" name="random_seed" id="random-seed" value="42">
                         </div>
                         <div class="form-group mb-3">
                             <label class="form-label fw-bold">Generator Type</label>
@@ -89,40 +100,10 @@
                             <div><label class="form-label small">Or Enter Directly</label><textarea class="form-control form-control-sm" name="direct_input" rows="3" placeholder="One expression per line"></textarea></div>
                         </div>
 
-                        <button type="submit" class="btn btn-success w-100 fw-bold"><i class="fas fa-play"></i> RUN FRESH SIMULATION</button>
-                    </form>
-                </div>
+                    </fieldset>
 
-                <div id="content-recursive" style="display: none;">
-                    <form id="recursive-form" action="/run_simulation_form" method="POST">
-                        <div class="form-group mb-3">
-                            <label class="form-label fw-bold">1. Select Parent Experiment</label>
-                            <select class="form-control border-warning" name="recursive_parent_id" id="recursive-parent-id" required>
-                                <option value="">-- Loading... --</option>
-                            </select>
-                            <div class="form-text small">Inherits <strong>Final Survivors</strong> and <strong>Random Seed</strong>.</div>
-                        </div>
-                        <div class="form-group mb-3">
-                            <label class="form-label fw-bold">2. Experiment Base Name</label>
-                            <input type="text" class="form-control" name="experiment_name" placeholder="e.g. Recursive Experiment #1">
-                        </div>
-                        <div class="row">
-                            <div class="col-md-4 mb-3">
-                                <label class="form-label fw-bold text-primary">Generations</label>
-                                <input type="number" class="form-control border-primary" name="num_generations" value="2" min="1">
-                            </div>
-                            <div class="col-md-4 mb-3">
-                                <label class="form-label fw-bold">Collisions</label>
-                                <input type="number" class="form-control" name="total_collisions" value="1000">
-                            </div>
-                            <div class="col-md-4 mb-3">
-                                <label class="form-label fw-bold">Polling</label>
-                                <input type="number" class="form-control" name="polling_frequency" value="10">
-                            </div>
-                        </div>
-                        <button type="submit" class="btn btn-warning w-100 fw-bold shadow-sm"><i class="fas fa-sitemap"></i> INITIATE RECURSION</button>
-                    </form>
-                </div>
+                    <button id="run-simulation-button" type="submit" class="btn btn-success w-100 fw-bold"><i class="fas fa-play"></i> RUN SIMULATION</button>
+                </form>
 
             </div>
         </div>
@@ -160,15 +141,15 @@
                 <div id="simulation-summary" class="simulation-summary" style="display: none;">
                     <div class="summary-item">
                         <span class="summary-label">Generator:</span>
-                        <span class="summary-value" id="summary-generator">Fontana</span>
+                        <span class="summary-value" id="summary-generator"></span>
                     </div>
                     <div class="summary-item">
-                        <span class="summary-label">Collisions:</span>
-                        <span class="summary-value" id="summary-collisions">1,000</span>
+                        <span class="summary-label">Collisions / generation:</span>
+                        <span class="summary-value" id="summary-collisions"></span>
                     </div>
                     <div class="summary-item" data-summary="expressions">
                         <span class="summary-label">Expressions:</span>
-                        <span class="summary-value" id="summary-expressions">25</span>
+                        <span class="summary-value" id="summary-expressions"></span>
                     </div>
                     <div class="summary-item">
                         <span class="summary-label">Name:</span>
@@ -191,37 +172,8 @@
 
 {% block scripts %}
 <script>
-    // --- Tab Switcher Logic ---
-    // --- Tab Switcher Logic ---
-    function switchTab(tabName) {
-        const tabFresh = document.getElementById('tab-fresh');
-        const tabRecursive = document.getElementById('tab-recursive');
-
-        // 1. Reset both tabs to "Inactive" (Faded & Normal font weight)
-        tabFresh.style.backgroundColor = "transparent";
-        tabFresh.style.opacity = "0.5";
-        tabFresh.style.fontWeight = "normal";
-
-        tabRecursive.style.backgroundColor = "transparent";
-        tabRecursive.style.opacity = "0.5";
-        tabRecursive.style.fontWeight = "normal";
-
-        // 2. Hide all content
-        document.getElementById('content-fresh').style.display = "none";
-        document.getElementById('content-recursive').style.display = "none";
-
-        // 3. Set the clicked tab to "Active" (Lit up & Bold)
-        const activeTab = document.getElementById('tab-' + tabName);
-        activeTab.style.backgroundColor = "rgba(255,255,255,0.1)";
-        activeTab.style.opacity = "1";
-        activeTab.style.fontWeight = "bold";
-
-        // 4. Show the selected content
-        document.getElementById('content-' + tabName).style.display = "block";
-    }
-
     document.addEventListener("DOMContentLoaded", function () {
-        // --- Generator Toggles (Fresh Tab) ---
+        // --- Generator Toggles ---
         const generatorSelect = document.getElementById('generator-type');
         function toggleGeneratorOptions() {
             document.getElementById('from-file-options').style.display = 'none';
@@ -236,23 +188,60 @@
         generatorSelect.addEventListener('change', toggleGeneratorOptions);
         toggleGeneratorOptions();
 
-        // --- Populate Recursive Dropdown ---
+        // --- Optional Previous Experiment ---
         const parentSelect = document.getElementById('recursive-parent-id');
+        const freshOptions = document.getElementById('fresh-options');
+        const parentLoadStatus = document.getElementById('parent-load-status');
+        function toggleInitialPopulation() {
+            const hasParent = parentSelect.value !== '';
+            freshOptions.hidden = hasParent;
+            freshOptions.disabled = hasParent;
+        }
+        parentSelect.addEventListener('change', toggleInitialPopulation);
+        toggleInitialPopulation();
+
+        // A supplied population has no refill generator; require an explicit choice.
+        const wipeoutInput = document.getElementById('wipeout-percent');
+        const refillOptions = document.getElementById('refill-options');
+        const refillInput = document.getElementById('refill-expression');
+        function toggleRefillOptions() {
+            const suppliedPopulation = parentSelect.value !== '' || generatorSelect.value === 'from_file';
+            const needsRefill = suppliedPopulation && Number(wipeoutInput.value) > 0;
+            refillOptions.hidden = !needsRefill;
+            refillInput.disabled = !needsRefill;
+            refillInput.required = needsRefill;
+        }
+        wipeoutInput.addEventListener('input', toggleRefillOptions);
+        parentSelect.addEventListener('change', toggleRefillOptions);
+        generatorSelect.addEventListener('change', toggleRefillOptions);
+        toggleRefillOptions();
+
         fetch('/list_experiments')
-            .then(res => res.json())
+            .then(res => {
+                if (!res.ok) throw new Error('Could not load previous experiments');
+                return res.json();
+            })
             .then(data => {
-                parentSelect.innerHTML = '<option value="">-- Choose an Experiment to Evolve --</option>';
                 data.experiments.forEach(exp => {
                     const opt = document.createElement('option');
                     opt.value = exp.config_id;
                     opt.textContent = `${exp.name || 'Exp ' + exp.config_id} (Seed: ${exp.random_seed})`;
                     parentSelect.appendChild(opt);
                 });
+                parentLoadStatus.textContent = data.experiments.length ? '' : 'No previous experiments are available.';
+            })
+            .catch(() => {
+                parentLoadStatus.textContent = 'Previous experiments could not be loaded. You can still start a new population.';
             });
 
-        // --- Form Submission Handler (Handles Both Tabs) ---
+        // --- Form Submission Handler ---
+        let submitting = false;
+        const submitButton = document.getElementById('run-simulation-button');
         function handleSimulationSubmit(e) {
             e.preventDefault();
+            if (submitting) return;
+            submitting = true;
+            submitButton.disabled = true;
 
             const status = document.getElementById('simulation-status');
             const loader = document.getElementById('loading-indicator');
@@ -266,7 +255,7 @@
 
             fetch(this.action, {
                 method: 'POST',
-                body: new FormData(this) // Pulls data from whichever form triggered the event
+                body: new FormData(this)
             })
                 .then(response => response.json())
                 .then(data => {
@@ -276,6 +265,9 @@
                         successMessage.style.display = 'block';
 
                         document.getElementById('summary-name').textContent = data.experiment_name;
+                        document.getElementById('summary-generator').textContent = data.generator_type === 'from_file' ? 'Supplied population' : data.generator_type;
+                        document.getElementById('summary-collisions').textContent = Number(data.total_collisions).toLocaleString();
+                        document.getElementById('summary-expressions').textContent = Number(data.population_size).toLocaleString();
                         document.getElementById('view-experiment-link').href = '/view_experiment/' + data.config_id;
                         document.getElementById('view-experiment-link').style.display = 'inline-block';
                         summary.style.display = 'block';
@@ -284,19 +276,27 @@
                         status.innerHTML = '<i class="fas fa-check-circle"></i> Simulation Complete!';
                         status.style.display = 'block';
                     } else {
-                        alert("Error: " + data.message);
+                        status.className = 'simulation-status error';
+                        status.textContent = 'Simulation reported an error. Check experiment history before retrying.';
                         status.style.display = 'block';
+                        alert("Error: " + data.message);
                     }
                 })
                 .catch(error => {
                     loader.style.display = 'none';
+                    status.className = 'simulation-status error';
+                    status.textContent = 'Could not confirm the simulation result. Check experiment history before retrying.';
+                    status.style.display = 'block';
                     alert('Server error occurred.');
                     console.error(error);
+                })
+                .finally(() => {
+                    submitting = false;
+                    submitButton.disabled = false;
                 });
         }
 
         document.getElementById('fresh-form').addEventListener('submit', handleSimulationSubmit);
-        document.getElementById('recursive-form').addEventListener('submit', handleSimulationSubmit);
     });
 </script>
-{% endblock %} 
+{% endblock %}

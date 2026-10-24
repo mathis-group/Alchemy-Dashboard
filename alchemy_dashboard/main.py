@@ -51,7 +51,7 @@ from werkzeug.utils import secure_filename
 import sqlite3
 from .config import DB_NAME
 
-from .simulation import run_experiment, canonical_expression
+from .simulation import run_experiment, run_recursive_experiment, canonical_expression
 from .plotting import (
     get_simulation_components,
     plot_experiment_metrics,
@@ -1239,13 +1239,15 @@ def generate_multi_dendrogram():
 def run_simulation_form():
     """Run one or more generations of a simulation and save each to the DB.
 
-    Each generation starts from the full final population of the previous
-    one, and is linked to it as a continuation.
+    Rust carries the full population between generations and applies the selected
+    wipeout/refill policy. Completed generations are then saved with lineage.
 
     Form data:
         total_collisions, polling_frequency, random_seed (int)
         experiment_name (str): "[Gen N]" is appended when num_generations > 1
         num_generations (int, default 1)
+        wipeout_percent (int, 0..100, default 0): native inter-generation wipeout
+        repopulation_expression: required for parent/manual starts with wipeout
         recursive_parent_id (int, optional): continue from this experiment
             instead of generating a fresh population (reuses its seed)
         generator_type (str): "Fontana", "BTree", or "from_file"
@@ -1264,6 +1266,8 @@ def run_simulation_form():
             base_name = "Auto-Evo"
 
         num_generations = int(request.form.get("num_generations", 1))
+        wipeout_percent = int(request.form.get("wipeout_percent", 0))
+        repopulation_expression = request.form.get("repopulation_expression", "")
 
         recursive_parent_id = request.form.get("recursive_parent_id")
         generator_type = request.form.get("generator_type", "Fontana")
@@ -1276,6 +1280,8 @@ def run_simulation_form():
             from .db_utils import get_experiment_details, get_expressions_for_collision
 
             parent_config, _, _ = get_experiment_details(last_config_id)
+            if parent_config is None:
+                raise ValueError(f"Parent ID {last_config_id} does not exist")
             random_seed = parent_config[1]
 
             final_state = get_expressions_for_collision(last_config_id, -1)
@@ -1297,74 +1303,50 @@ def run_simulation_form():
 
             generator_type = "from_file"
 
-        # --- MULTI-GENERATION LOOP ---
-        for gen in range(num_generations):
-            gen_idx = gen + 1
-            exp_name = (
-                f"{base_name} [Gen {gen_idx}]" if num_generations > 1 else base_name
-            )
+        config = {
+            "generator_type": generator_type,
+            "total_collisions": total_collisions,
+            "polling_frequency": polling_frequency,
+            "random_seed": random_seed,
+            "experiment_name": base_name,
+            "expressions": current_pool,
+        }
 
-            config = {
-                "generator_type": generator_type,
-                "total_collisions": total_collisions,
-                "polling_frequency": polling_frequency,
-                "random_seed": random_seed,
-                "experiment_name": exp_name,
-                "expressions": current_pool,
-            }
+        # Apply parameters for Gen 1 if it is a FRESH start
+        if not recursive_parent_id:
+            if generator_type == "from_file":
+                # Check for uploaded file
+                if (
+                    "expressions_file" in request.files
+                    and request.files["expressions_file"].filename
+                ):
+                    file = request.files["expressions_file"]
+                    filename = secure_filename(file.filename)
 
-            # Apply parameters for Gen 1 if it is a FRESH start
-            if gen == 0 and not recursive_parent_id:
-                if generator_type == "from_file":
-                    # Check for uploaded file
-                    if (
-                        "expressions_file" in request.files
-                        and request.files["expressions_file"].filename
-                    ):
-                        file = request.files["expressions_file"]
-                        filename = secure_filename(file.filename)
+                    if filename.endswith(".json"):
+                        file_content = file.read().decode("utf-8")
+                        data = json.loads(file_content)
+                        config["expressions"] = []
 
-                        if filename.endswith(".json"):
-                            file_content = file.read().decode("utf-8")
-                            data = json.loads(file_content)
-                            config["expressions"] = []
-
-                            if isinstance(data, dict):
-                                # PRIORITY 1: Final state counts
-                                if "final_state_counts" in data:
-                                    for item in data["final_state_counts"]:
-                                        config["expressions"].extend(
-                                            [item["expression"]] * item["count"]
-                                        )
-                                    print(
-                                        f"Loaded {len(config['expressions'])} expressions from FINAL STATE"
+                        if isinstance(data, dict):
+                            # PRIORITY 1: Final state counts
+                            if "final_state_counts" in data:
+                                for item in data["final_state_counts"]:
+                                    config["expressions"].extend(
+                                        [item["expression"]] * item["count"]
                                     )
-
-                                # PRIORITY 2: Initial state counts
-                                elif "initial_expression_counts" in data:
-                                    for item in data["initial_expression_counts"]:
-                                        config["expressions"].extend(
-                                            [item["expression"]] * item["count"]
-                                        )
-                                    print(
-                                        f"Loaded {len(config['expressions'])} expressions from INITIAL STATE"
-                                    )
-
-                                else:
-                                    return (
-                                        jsonify(
-                                            {
-                                                "status": "error",
-                                                "message": "JSON missing expression counts. Use Final State or Initial State JSON.",
-                                            }
-                                        ),
-                                        400,
-                                    )
-
-                            elif isinstance(data, list):
-                                config["expressions"] = data
                                 print(
-                                    f"Loaded {len(config['expressions'])} expressions from flat list"
+                                    f"Loaded {len(config['expressions'])} expressions from FINAL STATE"
+                                )
+
+                            # PRIORITY 2: Initial state counts
+                            elif "initial_expression_counts" in data:
+                                for item in data["initial_expression_counts"]:
+                                    config["expressions"].extend(
+                                        [item["expression"]] * item["count"]
+                                    )
+                                print(
+                                    f"Loaded {len(config['expressions'])} expressions from INITIAL STATE"
                                 )
 
                             else:
@@ -1372,148 +1354,152 @@ def run_simulation_form():
                                     jsonify(
                                         {
                                             "status": "error",
-                                            "message": "JSON format not recognized",
+                                            "message": "JSON missing expression counts. Use Final State or Initial State JSON.",
                                         }
                                     ),
                                     400,
                                 )
 
-                        else:
-                            # Text file: read line by line
-                            content = file.read().decode("utf-8")
-                            config["expressions"] = [
-                                line.strip()
-                                for line in content.split("\n")
-                                if line.strip()
-                            ]
+                        elif isinstance(data, list):
+                            config["expressions"] = data
+                            print(
+                                f"Loaded {len(config['expressions'])} expressions from flat list"
+                            )
 
-                    # Check for direct input
-                    elif request.form.get("direct_input"):
+                        else:
+                            return (
+                                jsonify(
+                                    {
+                                        "status": "error",
+                                        "message": "JSON format not recognized",
+                                    }
+                                ),
+                                400,
+                            )
+
+                    else:
+                        # Text file: read line by line
+                        content = file.read().decode("utf-8")
                         config["expressions"] = [
-                            e.strip()
-                            for e in request.form.get("direct_input").split("\n")
-                            if e.strip()
+                            line.strip()
+                            for line in content.split("\n")
+                            if line.strip()
                         ]
 
-                    # Validate we have expressions
-                    if not config.get("expressions"):
-                        return (
-                            jsonify(
-                                {
-                                    "status": "error",
-                                    "message": "No expressions provided.",
-                                }
-                            ),
-                            400,
-                        )
+                # Check for direct input
+                elif request.form.get("direct_input"):
+                    config["expressions"] = [
+                        e.strip()
+                        for e in request.form.get("direct_input").split("\n")
+                        if e.strip()
+                    ]
 
-                elif generator_type == "BTree":
-                    config.update(
-                        {
-                            "size": int(request.form.get("btree_size", 5)),
-                            "freevar_probability": float(
-                                request.form.get("freevar_probability", 0.5)
-                            ),
-                            "max_free_vars": int(request.form.get("max_free_vars", 3)),
-                            "standardization": request.form.get(
-                                "standardization", "prefix"
-                            ),
-                            "num_expressions": int(
-                                request.form.get("num_expressions", 10)
-                            ),
-                        }
-                    )
-                elif generator_type == "Fontana":
-                    config.update(
-                        {
-                            "abs_low": float(request.form.get("abs_low", 0.1)),
-                            "abs_high": float(request.form.get("abs_high", 0.5)),
-                            "app_low": float(request.form.get("app_low", 0.2)),
-                            "app_high": float(request.form.get("app_high", 0.6)),
-                            "min_depth": int(request.form.get("min_depth", 1)),
-                            "max_depth": int(request.form.get("max_depth", 5)),
-                            "max_free_vars": int(request.form.get("fontana_max_fv", 2)),
-                            "initial_expression_count": int(
-                                request.form.get("fontana_expression_count", 10)
-                            ),
-                            "free_variable_probability": float(
-                                request.form.get("free_variable_probability", 0.5)
-                            ),
-                        }
+                # Validate we have expressions
+                if not config.get("expressions"):
+                    return (
+                        jsonify(
+                            {
+                                "status": "error",
+                                "message": "No expressions provided.",
+                            }
+                        ),
+                        400,
                     )
 
-            # Fire Engine
-            result = run_experiment(config)
-
-            # Validate engine output
-            if not result or "metrics" not in result:
-                raise ValueError(
-                    f"Simulation engine failed to return metrics for {exp_name}."
+            elif generator_type == "BTree":
+                config.update(
+                    {
+                        "size": int(request.form.get("btree_size", 5)),
+                        "freevar_probability": float(
+                            request.form.get("freevar_probability", 0.5)
+                        ),
+                        "max_free_vars": int(request.form.get("max_free_vars", 3)),
+                        "standardization": request.form.get(
+                            "standardization", "prefix"
+                        ),
+                        "num_expressions": int(
+                            request.form.get("num_expressions", 10)
+                        ),
+                    }
+                )
+            elif generator_type == "Fontana":
+                config.update(
+                    {
+                        "abs_low": float(request.form.get("abs_low", 0.1)),
+                        "abs_high": float(request.form.get("abs_high", 0.5)),
+                        "app_low": float(request.form.get("app_low", 0.2)),
+                        "app_high": float(request.form.get("app_high", 0.6)),
+                        "min_depth": int(request.form.get("min_depth", 1)),
+                        "max_depth": int(request.form.get("max_depth", 5)),
+                        "max_free_vars": int(request.form.get("fontana_max_fv", 2)),
+                        "initial_expression_count": int(
+                            request.form.get("fontana_expression_count", 10)
+                        ),
+                        "free_variable_probability": float(
+                            request.form.get("free_variable_probability", 0.5)
+                        ),
+                    }
                 )
 
-            # Save DB
+        config.update(
+            num_generations=num_generations,
+            wipeout_percent=wipeout_percent,
+            repopulation_expression=repopulation_expression,
+        )
+        # One native call performs every generation and wipeout before DB writes.
+        # The remaining Python loop only persists already completed results.
+        results = run_recursive_experiment(config)
+        previous_population_size = len(current_pool or [])
+        for gen_idx, result in enumerate(results, 1):
+            exp_name = f"{base_name} [Gen {gen_idx}]" if num_generations > 1 else base_name
+            stored_params = generator_params_from_config(config)
+            stored_params.update(native_config=result["native_config"], generation=gen_idx)
             new_id = save_configuration(
                 random_seed=random_seed,
-                generator_type=generator_type,
+                generator_type=generator_type if gen_idx == 1 else "from_file",
                 total_collisions=total_collisions,
                 polling_frequency=polling_frequency,
-                probability_range=json.dumps(generator_params_from_config(config)),
+                probability_range=json.dumps(stored_params),
                 freevar_generation_probability=config.get("freevar_probability"),
                 name=exp_name,
             )
 
-            # Save population/metrics
-            # Collision 0 (the starting soup) comes from the simulation's
-            # first snapshot, so it is not saved separately here.
-            initial_expressions = result.get("initial_expressions", [])
-
-            metrics = result.get("metrics", [])
-            for metric in metrics:
+            # Adapter metrics include collision zero, exact polls and exact final.
+            for metric in result["metrics"]:
                 save_averages(
-                    new_id,
-                    metric["collision_number"],
-                    metric["entropy"],
-                    metric["unique_expressions"],
+                    new_id, metric["collision_number"], metric["entropy"], metric["unique_expressions"],
                 )
-                if "expressions" in metric:
-                    for expr, count in Counter(metric["expressions"]).items():
-                        save_experiment_state(
-                            new_id, metric["collision_number"], expr, count
-                        )
+                for expr, count in Counter(metric["expressions"]).items():
+                    save_experiment_state(new_id, metric["collision_number"], expr, count)
 
-            # Link Lineage
             if last_config_id:
+                # Seeding from a saved parent uses its whole population. Native
+                # inter-generation wipeout replaces floor(N * percent / 100).
+                removed = previous_population_size * wipeout_percent // 100 if gen_idx > 1 else 0
+                fraction_used = (previous_population_size - removed) / previous_population_size if previous_population_size else 0.0
                 save_continuation_metadata(
-                    new_id,
-                    last_config_id,
-                    1.0,
-                    len(current_pool or initial_expressions),
-                    0,
+                    new_id, last_config_id, fraction_used,
+                    previous_population_size - removed, removed,
                 )
-
-            # SETUP FOR NEXT GENERATION IN THE LOOP
             last_config_id = new_id
-            generator_type = "from_file"
-
-            # Carry the full final population into the next generation
-            if metrics and "expressions" in metrics[-1]:
-                current_pool = list(metrics[-1]["expressions"])
-            else:
-                raise ValueError(
-                    f"{exp_name} produced no surviving expressions to pass on."
-                )
+            previous_population_size = len(result["final_expressions"])
 
         return jsonify(
             {
                 "status": "success",
                 "config_id": last_config_id,
                 "experiment_name": exp_name,
+                "generator_type": generator_type,
+                "total_collisions": total_collisions,
+                "population_size": len(results[-1]["final_expressions"]),
                 "message": f"Successfully ran {num_generations} generation(s).",
             }
         )
 
+    except ValueError as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
     except Exception as e:
-        print(f"Recursion Loop Error: {e}")
+        print(f"Native Recursion Error: {e}")
         return jsonify({"status": "error", "message": str(e)}), 500
 
 

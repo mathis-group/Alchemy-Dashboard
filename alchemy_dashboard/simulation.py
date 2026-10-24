@@ -20,6 +20,8 @@ The starting population comes from a generator:
 """
 
 import os
+import json
+import math
 import alchemy
 import random
 from collections import Counter
@@ -333,3 +335,121 @@ def run_experiment(config):
             'new_expression_count': len(new_expressions)
         }
     }
+
+
+def run_recursive_experiment(config):
+    """Run all generations once in Rust and adapt exact snapshots for persistence.
+
+    Requires the recursive binding with opt-in completed-collision polling. This
+    function does not write the database or fall back to Python simulation loops.
+    Provided populations keep all multiplicities; malformed inputs are counted as
+    dropped as in run_experiment, but at least two valid expressions are required.
+    """
+    if not hasattr(alchemy, "simulate_recursive_experiment") or not hasattr(alchemy, "PyConfig"):
+        raise RuntimeError("The native recursive Python binding is required for this form")
+
+    collisions = int(config.get("total_collisions", 1000))
+    polling = int(config.get("polling_frequency", 10))
+    generations = int(config.get("num_generations", 1))
+    wipeout = int(config.get("wipeout_percent", 0))
+    if collisions < 0 or polling <= 0 or generations <= 0 or not 0 <= wipeout <= 100:
+        raise ValueError("Collisions must be nonnegative, polling/generations positive, and wipeout 0–100")
+
+    native = json.loads(alchemy.PyConfig().to_json())
+    native.update(run_limit=collisions, polling_interval=polling)
+    native["recursive_config"].update(n_generations=generations, wipeout_percent=wipeout)
+    seed = _seed_hex(config.get("random_seed"))
+    native["soup_config"]["seed"] = seed
+    generator_type = config.get("generator_type")
+    provided = None
+    dropped = 0
+
+    if generator_type == "BTree":
+        standardization = {"prefix": "Prefix", "postfix": "Postfix", "none": "None"}.get(config["standardization"])
+        if standardization is None:
+            raise ValueError("Unknown BTree standardization")
+        size = int(config["size"])
+        palette = int(config["max_free_vars"])
+        probability = float(config["freevar_probability"])
+        if size <= 0 or palette <= 0 or not math.isfinite(probability) or not 0 <= probability <= 1:
+            raise ValueError("BTree size/palette must be positive and free-variable probability finite in [0, 1]")
+        generator = {"BTree": {
+            "seed": seed, "size": size,
+            "freevar_generation_probability": probability,
+            "n_max_free_vars": palette,
+            "standardization": standardization,
+        }}
+        native["sample_size"] = int(config["num_expressions"])
+    elif generator_type == "Fontana":
+        generator = {"Fontana": {
+            "seed": seed, "min_depth": int(config.get("min_depth", 1)),
+            "max_depth": int(config["max_depth"]),
+            "abstraction_prob_range": [float(config["abs_low"]), float(config["abs_high"])],
+            "application_prob_range": [float(config["app_low"]), float(config["app_high"])],
+        }}
+        native["sample_size"] = int(config.get("initial_expression_count", 10))
+    elif generator_type == "from_file":
+        requested = config.get("expressions") or []
+        soup = alchemy.PySoup()
+        soup.perturb(list(requested))
+        provided = soup.expressions()
+        dropped = len(requested) - len(provided)
+        if len(provided) < 2:
+            raise ValueError("At least two valid supplied expressions are required")
+        # With zero wipeout no generator is used for refill. With nonzero
+        # wipeout require an explicit expression rather than invent a generator.
+        generator = native["expression"]["UntypedLambda"]["generator"]
+        next(iter(generator.values()))["seed"] = seed
+        native["sample_size"] = 0
+        if wipeout:
+            refill = config.get("repopulation_expression")
+            if not isinstance(refill, str) or not refill.strip():
+                raise ValueError("A refill expression is required for parent/manual populations with wipeout")
+            refill = canonical_expression(refill.strip())
+            if refill is None:
+                raise ValueError("The refill expression could not be parsed")
+            native["recursive_config"].update(
+                refill_type="CustomExpression", repopulation_expression=refill,
+            )
+    else:
+        raise ValueError(f"Unknown generator type: {generator_type}")
+
+    if provided is None and native["sample_size"] < 2:
+        raise ValueError("At least two generated expressions are required")
+    native["expression"]["UntypedLambda"]["generator"] = generator
+    results = alchemy.simulate_recursive_experiment(
+        json.dumps(native), initial_expressions=provided, polling_mode="completed",
+    )
+    if len(results) != generations:
+        raise ValueError("Native engine returned an incomplete generation list")
+    expected_polls = list(range(polling, collisions + 1, polling))
+    if collisions and (not expected_polls or expected_polls[-1] != collisions):
+        expected_polls.append(collisions)
+    adapted = []
+    for index, generation in enumerate(results):
+        if generation.history_collisions != expected_polls or len(generation.history) != len(expected_polls):
+            raise ValueError("Native snapshots do not match completed-collision polling")
+        snapshots = {0: generation.initial_expressions}
+        snapshots.update(zip(generation.history_collisions, generation.history))
+        snapshots[collisions] = generation.final_expressions
+        metrics = []
+        for collision, expressions in sorted(snapshots.items()):
+            metric_soup = alchemy.PySoup()
+            metric_soup.perturb(expressions)
+            if metric_soup.len() != len(expressions):
+                raise ValueError("Native snapshot contains unparseable expressions")
+            metrics.append({
+                "collision_number": collision,
+                "entropy": metric_soup.population_entropy(),
+                "unique_expressions": len(metric_soup.unique_expressions()),
+                "expressions": expressions,
+            })
+        adapted.append({
+            "generation": generation.generation,
+            "metrics": metrics,
+            "initial_expressions": generation.initial_expressions,
+            "final_expressions": generation.final_expressions,
+            "dropped_expression_count": dropped if index == 0 else 0,
+            "native_config": native,
+        })
+    return adapted

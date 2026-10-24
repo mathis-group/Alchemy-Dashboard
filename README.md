@@ -49,6 +49,12 @@ alchemy_dashboard/
 
 ## Quickstart
 
+The unified simulation form currently requires the native API in
+[Modern-AlChemy #31](https://github.com/mathis-group/Modern-AlChemy/pull/31).
+The default dependency still tracks upstream `main`, which does not yet provide
+that API. Until the upstream dependency is available, use the explicit disposable
+[review environment](tests/REVIEW_NATIVE.md) to exercise this draft.
+
 ### Recommended: uv-managed setup
 
 1. **Clone the repository**

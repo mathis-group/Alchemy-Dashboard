@@ -1655,7 +1655,8 @@
     text-transform: uppercase;
 }
 
-#reactor-settings .form-check {
+#reactor-settings .form-check,
+#fontana-options .form-check {
     margin-bottom: 0.75rem !important;
     padding-left: 0.50rem !important;
     display: flex;
@@ -1663,7 +1664,8 @@
     gap: 0.25rem;
 }
 
-#reactor-settings input[type="checkbox"] {
+#reactor-settings input[type="checkbox"],
+#fontana-options input[type="checkbox"] {
   appearance: auto !important;
   -webkit-appearance: auto !important;
   width: 1rem !important;

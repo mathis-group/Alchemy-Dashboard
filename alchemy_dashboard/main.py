@@ -101,7 +101,8 @@ from .ASTGen import LambdaParser, VariableNode, LambdaNode, getColors
 # are saved, so the stored values describe what was really run.
 GENERATOR_PARAM_KEYS = {
     "BTree": ["size", "freevar_probability", "max_free_vars", "standardization", "num_expressions"],
-    "Fontana": ["abs_low", "abs_high", "app_low", "app_high", "min_depth", "max_depth", "initial_expression_count"],
+    "Fontana": ["abs_low", "abs_high", "app_low", "app_high", "min_depth", "max_depth", "initial_expression_count",
+                "max_free_vars", "free_variable_probability", "reduce_to_normal_form"],
 }
 
 
@@ -155,6 +156,7 @@ def inherited_generator_params(config_id):
     generator_type = values["generator_type"]
     # The form's names for these differ from the saved ones
     values["size"] = values.get("btree_size")
+    values.setdefault("max_free_vars", values.get("fontana_max_fv"))
     # The starting soup came from the parent, not the generator, so its
     # expression count is left out
     keys = [key for key in GENERATOR_PARAM_KEYS[generator_type]
@@ -1557,13 +1559,15 @@ def run_simulation_form():
                             "app_high": float(request.form.get("app_high", 0.6)),
                             "min_depth": int(request.form.get("min_depth", 1)),
                             "max_depth": int(request.form.get("max_depth", 5)),
-                            "max_free_vars": int(request.form.get("fontana_max_fv", 2)),
+                            # Missing settings are off, as in Modern-AlChemy
+                            "max_free_vars": int(request.form.get("fontana_max_fv", 0)),
                             "initial_expression_count": int(
                                 request.form.get("fontana_expression_count", 10)
                             ),
                             "free_variable_probability": float(
-                                request.form.get("free_variable_probability", 0.5)
+                                request.form.get("free_variable_probability", 0.0)
                             ),
+                            "reduce_to_normal_form": "reduce_to_normal_form" in request.form,
                         }
                     )
 

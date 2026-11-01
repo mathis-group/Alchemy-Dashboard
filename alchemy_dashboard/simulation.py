@@ -56,6 +56,38 @@ SOUP_DEFAULTS = {
 }
 
 
+def fontana_generator_settings(config):
+    """The Fontana generator settings from a dashboard config, keyed as Modern-AlChemy names them.
+
+    Used for both the saved JSON config and alchemy.PyFontanaGen.from_config,
+    so the starting soup and Rust's refills always match. A missing setting
+    falls back to Modern-AlChemy's "off" value, so configs saved before these
+    settings existed re-run as before.
+
+    Raises:
+        ValueError: if a value is out of range (Rust panics instead of raising).
+    """
+    settings = {
+        "min_depth": int(config.get("min_depth", 1)),
+        "max_depth": int(config["max_depth"]),
+        "abstraction_prob_range": [float(config["abs_low"]), float(config["abs_high"])],
+        "application_prob_range": [float(config["app_low"]), float(config["app_high"])],
+        "freevar_generation_probability": float(config.get("free_variable_probability", 0.0)),
+        "max_free_vars": int(config.get("max_free_vars", 0)),
+        "reduce_to_normal_form": bool(config.get("reduce_to_normal_form", False)),
+        # Seeds are reduced with the reactor's cutoffs, like reaction products
+        "reduction_cutoff": int(config.get("reduction_cutoff", REACTOR_DEFAULTS["reduction_cutoff"])),
+        "size_cutoff": int(config.get("size_cutoff", REACTOR_DEFAULTS["size_cutoff"])),
+    }
+    if not 0 <= settings["freevar_generation_probability"] <= 1:
+        raise ValueError("Free variable probability must be between 0 and 1")
+    if settings["max_free_vars"] < 0:
+        raise ValueError("Max free variables can't be negative")
+    if settings["max_free_vars"] > 0 and settings["min_depth"] < 1:
+        raise ValueError("Free variables need a min depth of at least 1")
+    return settings
+
+
 def settings_from_rust_config(rust_config_json):
     """Read the reactor and soup settings back out of a saved config.
 
@@ -151,6 +183,11 @@ def form_values_from_rust_config(rust_config):
             "app_high": float(params["application_prob_range"][1]),
             "min_depth": int(params.get("min_depth", 1)),
             "max_depth": int(params["max_depth"]),
+            # Configs saved before these settings existed get Modern-AlChemy's
+            # "off" values, not the form's defaults, so they re-run as before
+            "fontana_max_fv": int(params.get("max_free_vars", 0)),
+            "free_variable_probability": float(params.get("freevar_generation_probability", 0.0)),
+            "reduce_to_normal_form": bool(params.get("reduce_to_normal_form", False)),
         })
         if sample_size is not None:
             values["fontana_expression_count"] = int(sample_size)
@@ -210,13 +247,7 @@ def build_rust_config_json(config, sample_size=None):
         }}
         requested = config.get("num_expressions", 10)
     elif generator_type == "Fontana":
-        generator = {"Fontana": {
-            "seed": seed,
-            "min_depth": int(config.get("min_depth", 1)),
-            "max_depth": int(config["max_depth"]),
-            "abstraction_prob_range": [float(config["abs_low"]), float(config["abs_high"])],
-            "application_prob_range": [float(config["app_low"]), float(config["app_high"])],
-        }}
+        generator = {"Fontana": {"seed": seed, **fontana_generator_settings(config)}}
         requested = config.get("initial_expression_count", 10)
     elif generator_type == "from_file":
         # The starting expressions are given, but the generator still makes
@@ -431,7 +462,9 @@ def run_experiment(config):
                            standardization, num_expressions
                 Fontana:   abs_low, abs_high, app_low, app_high, max_depth,
                            min_depth (default 1),
-                           initial_expression_count (default 10)
+                           initial_expression_count (default 10),
+                           max_free_vars, free_variable_probability,
+                           reduce_to_normal_form (see fontana_generator_settings)
                 from_file: file_path (text file, one expression per line)
                            or expressions (list of strings)
 
@@ -484,14 +517,13 @@ def run_experiment(config):
         # Configure Fontana generator.
         # abs_range / app_range are probability ranges for creating
         # abstractions (\x.body) and applications (f x) while building a tree.
-        # Note: max_free_vars and free_variable_probability sent by the form
-        # are not passed to the generator.
+        # Same settings as the saved JSON config.
+        settings = fontana_generator_settings(config)
         generator = alchemy.PyFontanaGen.from_config(
-            abs_range=(config['abs_low'], config['abs_high']),
-            app_range=(config['app_low'], config['app_high']),
-            min_depth=config.get('min_depth', 1),
-            max_depth=config['max_depth'],
-            seed=_seed_hex(config['random_seed'])
+            abs_range=tuple(settings.pop('abstraction_prob_range')),
+            app_range=tuple(settings.pop('application_prob_range')),
+            seed=_seed_hex(config['random_seed']),
+            **settings
         )
         # Generate initial expressions. generate() can return nothing, and
         # those attempts are skipped, so the result may have fewer than `desired`.

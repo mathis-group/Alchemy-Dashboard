@@ -16,8 +16,9 @@ Main groups of functions:
     Multi-experiment      create_multi_experiment_dendrogram
 
 "Entropy" measures how evenly the population is spread across different
-expressions; "unique expressions" is how many distinct expressions exist.
-Both are recorded at each sampled collision.
+expressions; "unique expressions" is how many distinct expressions exist;
+"success rate" is the share of collisions that added a product to the soup.
+All are recorded at each sampled collision.
 """
 
 from bokeh.plotting import figure
@@ -143,7 +144,8 @@ def plot_experiment_metrics(df):
 
     Returns:
         dict: Dictionary of Bokeh figure objects, keyed by plot type
-            ("entropy_plot" and "unique_expressions_plot")
+            ("entropy_plot", "unique_expressions_plot" and
+            "success_rate_plot"; see plot_success_rate)
     """
     from bokeh.plotting import figure
     from bokeh.models import ColumnDataSource, HoverTool, BoxSelectTool, LassoSelectTool
@@ -260,8 +262,79 @@ def plot_experiment_metrics(df):
 
     return {
         'entropy_plot': entropy_plot,
-        'unique_expressions_plot': unique_expressions_plot
+        'unique_expressions_plot': unique_expressions_plot,
+        'success_rate_plot': plot_success_rate(df),
     }
+
+
+def success_rate_table(df):
+    """Success rate between consecutive snapshots.
+
+    Args:
+        df (pandas.DataFrame): collision_number and successful_reactions
+            (a running total), one row per snapshot in collision order.
+
+    Returns:
+        pandas.DataFrame or None: one row per snapshot after the first, with
+            collision_number, collisions_in_interval, successes_in_interval
+            and success_rate (successes / collisions since the previous
+            snapshot). None if the run has no success counts (saved before
+            they were recorded).
+    """
+    if ('successful_reactions' not in df.columns or len(df) < 2
+            or df['successful_reactions'].isna().any()):
+        return None
+    collisions = df['collision_number'].astype(int).diff()
+    successes = df['successful_reactions'].astype(int).diff()
+    table = pd.DataFrame({
+        'collision_number': df['collision_number'],
+        'collisions_in_interval': collisions,
+        'successes_in_interval': successes,
+    }).iloc[1:]
+    # Two snapshots at the same collision can't happen in a normal run, but
+    # skip them rather than divide by zero
+    table = table[table['collisions_in_interval'] > 0].astype(int)
+    table['success_rate'] = table['successes_in_interval'] / table['collisions_in_interval']
+    return table
+
+
+def plot_success_rate(df):
+    """Plot the share of collisions that succeeded, between snapshots.
+
+    A collision succeeds when its product is added to the soup. It fails,
+    leaving the soup unchanged, when reduction hits a cutoff or the product
+    is discarded (a copy of a parent, the identity, or an expression with
+    free variables). Each point covers the collisions since the previous
+    snapshot. The y-axis is always 0 to 1 so runs can be compared.
+
+    Args:
+        df (pandas.DataFrame): as for plot_experiment_metrics, with a
+            successful_reactions column (running total).
+
+    Returns:
+        Figure: the plot, or one with a message if the run has no success
+            counts.
+    """
+    from bokeh.models import Range1d
+    fig = create_styled_figure("Success Rate Over Time", "Collision Number", "Success Rate",
+                               width=800, height=400)
+    fig.y_range = Range1d(-0.02, 1.02)
+    table = success_rate_table(df)
+    if table is None or table.empty:
+        fig.x_range = Range1d(0, 1)
+        fig.text(x=[0.5], y=[0.5], text=["No success data for this run (recorded for new runs only)"],
+                 text_align="center", text_baseline="middle", text_font_size="14px", text_color=TEXT_COLOR)
+        return fig
+    source = ColumnDataSource(table)
+    fig.line('collision_number', 'success_rate', source=source, line_width=2, color=ACCENT_COLOR)
+    fig.scatter('collision_number', 'success_rate', source=source,
+                size=8, color=ACCENT_COLOR, alpha=0.6)
+    fig.add_tools(HoverTool(tooltips=[
+        ("Collision", "@collision_number"),
+        ("Success Rate", "@success_rate{0.0%}"),
+        ("Successful", "@successes_in_interval of @collisions_in_interval"),
+    ]))
+    return fig
 
 
 

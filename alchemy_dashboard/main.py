@@ -141,6 +141,22 @@ def format_run_time(config):
     return f"{run_seconds:.1f} s" if run_seconds is not None else "—"
 
 
+def format_successful_reactions(metrics):
+    """Successful reactions over the whole run, from get_experiment_details() metrics.
+
+    e.g. "312,000 of 1,000,000 (31.2%)", counting the collisions since the
+    first snapshot (collision 0 for a normal run). "—" for runs saved before
+    success counts were recorded.
+    """
+    if len(metrics) < 2 or any(len(m) < 4 or m[3] is None for m in (metrics[0], metrics[-1])):
+        return "—"
+    collisions = metrics[-1][0] - metrics[0][0]
+    successes = metrics[-1][3] - metrics[0][3]
+    if collisions <= 0:
+        return "—"
+    return f"{successes:,} of {collisions:,} ({successes / collisions:.1%})"
+
+
 def inherited_generator_params(config_id):
     """Generator settings from a child run's saved config, keyed like a fresh run's.
 
@@ -272,6 +288,7 @@ def database_view():
         "total_collisions": config[3],
         "polling_frequency": config[4],
         "run_time": format_run_time(config),
+        "successful_reactions": format_successful_reactions(metrics),
         "timestamp": config[7],
         "generator_params": stored_params,
         "continuation": continuation_meta,
@@ -562,7 +579,8 @@ def download_final_state(config_id):
             # Graph data for home page import
             "collisions_data": {
                 "experiment_history": {
-                    str(m[0]): {"entropy": m[1], "unique_expressions": m[2]}
+                    str(m[0]): {"entropy": m[1], "unique_expressions": m[2],
+                                "successful_reactions": m[3]}
                     for m in metrics
                 }
             },
@@ -676,7 +694,8 @@ def upload_and_import():
             name=f"{original_name} (Imported)",
         )
 
-        # 2. Restore Averages (entropy & unique_expressions)
+        # 2. Restore Averages (entropy, unique_expressions, and
+        # successful_reactions when the export has it)
         if "collisions_data" in data:
             history = data["collisions_data"].get("experiment_history", {})
             for col_num, metrics in history.items():
@@ -685,6 +704,7 @@ def upload_and_import():
                     int(col_num),
                     metrics["entropy"],
                     metrics["unique_expressions"],
+                    metrics.get("successful_reactions"),
                 )
 
         # 3. Handle Molecular Population
@@ -849,6 +869,7 @@ def view_experiment(config_id):
         "polling_frequency": config[4],
         "generator_params": stored_generator_params(config),
         "run_time": format_run_time(config),
+        "successful_reactions": format_successful_reactions(metrics),
         "timestamp": config[7],
         "name": config[8] or f"Experiment {config_id}",
     }
@@ -1008,7 +1029,7 @@ def compare_experiments():
 
 @app.route("/get_experiment_plot/<int:config_id>")
 def get_experiment_plot(config_id):
-    """Entropy and unique-expression plots for one experiment, as JSON."""
+    """Entropy, unique-expression and success-rate plots for one experiment, as JSON."""
     try:
         config, metrics, _ = get_experiment_details(config_id)
         if not config or not metrics:
@@ -1016,6 +1037,7 @@ def get_experiment_plot(config_id):
         plots = plot_experiment_metrics(process_collision_data(metrics))
         entropy_script, entropy_div = components(plots["entropy_plot"])
         unique_script, unique_div = components(plots["unique_expressions_plot"])
+        success_script, success_div = components(plots["success_rate_plot"])
         return jsonify(
             {
                 "status": "success",
@@ -1027,6 +1049,10 @@ def get_experiment_plot(config_id):
                     r"<script[^>]*>", "", unique_script
                 ).replace("</script>", ""),
                 "unique_expressions_div": unique_div,
+                "success_rate_script": re.sub(
+                    r"<script[^>]*>", "", success_script
+                ).replace("</script>", ""),
+                "success_rate_div": success_div,
             }
         )
     except Exception as e:
@@ -1052,6 +1078,7 @@ def get_experiment_metadata(config_id):
                     "polling_frequency": config[4],
                     "generator_params": generator_params,
                     "run_time": format_run_time(config),
+                    "successful_reactions": format_successful_reactions(metrics),
                     "timestamp": config[7],
                     "name": config[8] or f"Experiment {config[0]}",
                     "continuation": get_continuation_metadata(config_id),

@@ -88,8 +88,10 @@ def get_experiment_details(config_id):
                 [6] freevar_generation_probability
                 [7] timestamp          [8] name
                 [9] run_seconds (None for experiments saved before it existed)
-            metrics: list of (collision_number, entropy, unique_expressions),
-                in collision order
+            metrics: list of (collision_number, entropy, unique_expressions,
+                successful_reactions), in collision order. successful_reactions
+                is how many collisions so far added a product to the soup
+                (None for experiments saved before it was recorded).
             initial_expressions: list of (expression, count) at collision 0,
                 most common first
         If the experiment doesn't exist, returns (None, [], []).
@@ -112,7 +114,7 @@ def get_experiment_details(config_id):
     
     # Get metrics
     cursor.execute('''
-        SELECT collision_number, entropy, unique_expressions
+        SELECT collision_number, entropy, unique_expressions, successful_reactions
         FROM Averages
         WHERE config_id = ?
         ORDER BY collision_number
@@ -182,13 +184,15 @@ def process_collision_data(metrics):
     """Process collision metrics data into a DataFrame for plotting.
 
     Args:
-        metrics (list): Either (collision_number, entropy, unique_expressions)
-            tuples, as returned by get_experiment_details(), or dicts with
-            those same keys.
+        metrics (list): Either (collision_number, entropy, unique_expressions,
+            successful_reactions) tuples, as returned by
+            get_experiment_details(), or dicts with those same keys.
+            successful_reactions may be missing (older data).
 
     Returns:
         pandas.DataFrame: Columns collision_number, entropy,
-            unique_expressions_count (the format plot_experiment_metrics expects).
+            unique_expressions_count, successful_reactions (None where
+            unknown); the format plot_experiment_metrics expects.
     """
     print(f"[DEBUG] process_collision_data called with {len(metrics)} metrics")
     if metrics:
@@ -201,15 +205,18 @@ def process_collision_data(metrics):
             data.append({
                 'collision_number': metric['collision_number'],
                 'entropy': metric['entropy'],
-                'unique_expressions_count': metric['unique_expressions']
+                'unique_expressions_count': metric['unique_expressions'],
+                'successful_reactions': metric.get('successful_reactions')
             })
         else:
-            # Handle tuple format (legacy)
-            collision_number, entropy, unique_expressions = metric
+            # Tuple format: (collision_number, entropy, unique_expressions
+            # [, successful_reactions])
+            collision_number, entropy, unique_expressions = metric[:3]
             data.append({
                 'collision_number': collision_number,
                 'entropy': entropy,
-                'unique_expressions_count': unique_expressions
+                'unique_expressions_count': unique_expressions,
+                'successful_reactions': metric[3] if len(metric) > 3 else None
             })
     
     df = pd.DataFrame(data)

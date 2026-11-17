@@ -472,8 +472,9 @@ def run_experiment(config):
         dict: Results containing metrics and initial expressions:
             - metrics: list of snapshots, one every polling_frequency
               collisions, each with collision_number, entropy,
-              unique_expressions (a count), and expressions (the full
-              population at that point)
+              unique_expressions (a count), successful_reactions (how many
+              collisions so far added a product to the soup), and
+              expressions (the full population at that point)
             - initial_expressions: the starting population, in the engine's
               canonical form (unparseable expressions removed)
             - dropped_expression_count: how many starting expressions the
@@ -570,11 +571,18 @@ def run_experiment(config):
     if dropped_count:
         print(f"Warning: {dropped_count} starting expressions could not be parsed and were dropped")
 
+    # Collisions so far whose product was added to the soup. A collision
+    # fails, and leaves the soup unchanged, when reduction hits a cutoff or
+    # the product is discarded (a copy of a parent, the identity, or an
+    # expression with free variables).
+    successful_reactions = 0
+
     def record_snapshot(collision_number):
         metrics.append({
             'collision_number': collision_number,
             'entropy': simulation.population_entropy(),
             'unique_expressions': len(simulation.unique_expressions()),
+            'successful_reactions': successful_reactions,
             'expressions': simulation.expressions()  # Add full state data
         })
 
@@ -585,7 +593,8 @@ def run_experiment(config):
     # polling_frequency collisions, and the final collision is always recorded.
     total_collisions = config['total_collisions']
     for n in range(1, total_collisions + 1):
-        simulation.simulate_for(1, log=False)
+        # simulate_for returns how many of its collisions succeeded (0 or 1 here)
+        successful_reactions += simulation.simulate_for(1, log=False)
         if n % config['polling_frequency'] == 0 or n == total_collisions:
             record_snapshot(n)
     

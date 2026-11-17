@@ -79,6 +79,10 @@
                     <span class="detail-value" id="run-time-value">{{ experiment.run_time or "—" }}</span>
                 </div>
                 <div class="detail-row">
+                    <span class="detail-label">Successful Reactions:</span>
+                    <span class="detail-value" id="successful-reactions-value">{{ experiment.successful_reactions or "—" }}</span>
+                </div>
+                <div class="detail-row">
                     <span class="detail-label">Timestamp:</span>
                     <span class="detail-value" id="timestamp-value">{{ experiment.timestamp }}</span>
                 </div>
@@ -254,6 +258,20 @@
                 <div class="card-body">
                     <div class="chart-container" id="unique-expressions-plots-container">
                         <div class="chart-placeholder">Select an experiment to visualize unique expressions.</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div class="card-header">
+                    <h3 class="card-title">
+                        <i class="fas fa-check-circle card-title-icon"></i>
+                        Success Rate Over Time
+                    </h3>
+                </div>
+                <div class="card-body">
+                    <div class="chart-container" id="success-rate-plots-container">
+                        <div class="chart-placeholder">Select an experiment to visualize the success rate.</div>
                     </div>
                 </div>
             </div>
@@ -701,6 +719,7 @@ const downloadExpressionsLink = document.getElementById('download-expressions-li
 const expressionListElement = document.getElementById('initial-expression-list');
 const entropyPlotsContainer = document.getElementById('entropy-plots-container');
 const uniqueExpressionsPlotsContainer = document.getElementById('unique-expressions-plots-container');
+const successRatePlotsContainer = document.getElementById('success-rate-plots-container');
 const statusMessage = document.querySelector('.status-message');
 
 function clearBokehComponentScripts() {
@@ -714,6 +733,9 @@ function setChartPlaceholders(message) {
     }
     if (uniqueExpressionsPlotsContainer) {
         uniqueExpressionsPlotsContainer.innerHTML = `<div class="chart-placeholder">${message}</div>`;
+    }
+    if (successRatePlotsContainer) {
+        successRatePlotsContainer.innerHTML = `<div class="chart-placeholder">${message}</div>`;
     }
 }
 
@@ -731,6 +753,9 @@ function renderExperimentPlots(configId) {
     clearBokehComponentScripts();
     entropyPlotsContainer.innerHTML = '<div class="chart-placeholder">Loading entropy plot…</div>';
     uniqueExpressionsPlotsContainer.innerHTML = '<div class="chart-placeholder">Loading unique expressions plot…</div>';
+    if (successRatePlotsContainer) {
+        successRatePlotsContainer.innerHTML = '<div class="chart-placeholder">Loading success rate plot…</div>';
+    }
 
     fetch(`/get_experiment_plot/${configId}`)
         .then(res => res.json())
@@ -752,6 +777,16 @@ function renderExperimentPlots(configId) {
                     uniqueScript.dataset.bokehComponent = 'true';
                     uniqueScript.textContent = data.unique_expressions_script;
                     document.body.appendChild(uniqueScript);
+                }
+                if (successRatePlotsContainer) {
+                    successRatePlotsContainer.innerHTML = data.success_rate_div || '<div class="chart-placeholder">No success rate data available.</div>';
+                    if (data.success_rate_script) {
+                        const successScript = document.createElement('script');
+                        successScript.type = 'text/javascript';
+                        successScript.dataset.bokehComponent = 'true';
+                        successScript.textContent = data.success_rate_script;
+                        document.body.appendChild(successScript);
+                    }
                 }
             } else {
                 console.error("Failed to load plot data");
@@ -1020,6 +1055,10 @@ if (experimentDropdown) {
                     const runTimeSpan = document.getElementById('run-time-value');
                     if (runTimeSpan) {
                         runTimeSpan.textContent = details.run_time || "—";
+                    }
+                    const successfulReactionsSpan = document.getElementById('successful-reactions-value');
+                    if (successfulReactionsSpan) {
+                        successfulReactionsSpan.textContent = details.successful_reactions || "—";
                     }
                     const timestampSpan = document.getElementById('timestamp-value');
                     if (timestampSpan) {

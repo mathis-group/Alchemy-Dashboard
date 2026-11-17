@@ -13,7 +13,8 @@ Tables (created by init_database):
                           initial population. (db_utils.get_expressions_for_collision
                           treats -1 as "the latest recorded collision".)
     Averages              Summary metrics (entropy, number of unique
-                          expressions) recorded at each sampled collision.
+                          expressions, successful reactions so far)
+                          recorded at each sampled collision.
     ContinuationMetadata  Links an experiment to the parent experiment it was
                           started from (multi-generation runs, extinction,
                           invasive species).
@@ -96,7 +97,8 @@ def init_database():
     )
     ''')
     
-    # Create Averages table: entropy and unique-expression count per sampled collision
+    # Create Averages table: entropy, unique-expression count and successful
+    # reactions so far, per sampled collision
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS Averages (
         average_id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -104,9 +106,19 @@ def init_database():
         collision_number INTEGER NOT NULL,
         entropy REAL,
         unique_expressions INTEGER,
+        successful_reactions INTEGER,
         FOREIGN KEY (config_id) REFERENCES Configurations(config_id)
     )
     ''')
+
+    # Add successful_reactions to databases created before it existed: how
+    # many collisions so far added a product to the soup. Older rows stay NULL.
+    try:
+        cursor.execute("SELECT name FROM pragma_table_info('Averages') WHERE name='successful_reactions'")
+        if not cursor.fetchone():
+            cursor.execute("ALTER TABLE Averages ADD COLUMN successful_reactions INTEGER")
+    except Exception as e:
+        print(f"Error adding successful_reactions column: {e}")
 
     # Track recursive experiments / continuations.
     # Each child experiment has at most one parent (child_config_id is the key).
@@ -286,12 +298,13 @@ def save_experiment_state(config_id, collision_number, expression, count):
     
     return experiment_id
 
-def save_averages(config_id, collision_number, entropy, unique_expressions):
+def save_averages(config_id, collision_number, entropy, unique_expressions,
+                  successful_reactions=None):
     """
     Save averages/metrics to the database.
 
-    Called once per sampled collision; these rows are what the entropy and
-    unique-expression plots are drawn from.
+    Called once per sampled collision; these rows are what the entropy,
+    unique-expression and success-rate plots are drawn from.
 
     Args:
         config_id (int): ID of the configuration
@@ -299,19 +312,22 @@ def save_averages(config_id, collision_number, entropy, unique_expressions):
         entropy (float): Entropy value (how evenly spread the population is
             across different expressions)
         unique_expressions (int): Count of unique expressions
+        successful_reactions (int): Collisions so far that added a product
+            to the soup (None when unknown, e.g. runs from older versions)
     """
     conn = sqlite3.connect(DB_NAME)
     cursor = conn.cursor()
-    
+
     cursor.execute('''
-    INSERT INTO Averages 
-    (config_id, collision_number, entropy, unique_expressions)
-    VALUES (?, ?, ?, ?)
+    INSERT INTO Averages
+    (config_id, collision_number, entropy, unique_expressions, successful_reactions)
+    VALUES (?, ?, ?, ?, ?)
     ''', (
         config_id,
         collision_number,
         entropy,
-        unique_expressions
+        unique_expressions,
+        successful_reactions
     ))
 
     conn.commit()
@@ -330,7 +346,8 @@ def save_run_metrics(config_id, metrics):
         config_id (int): ID of the configuration
         metrics (list): snapshots from run_experiment(), each with
             collision_number, entropy, unique_expressions and optionally
-            expressions (the full population, one entry per copy)
+            successful_reactions and expressions (the full population, one
+            entry per copy)
     """
     averages = []
     states = []
@@ -340,6 +357,7 @@ def save_run_metrics(config_id, metrics):
             metric["collision_number"],
             metric["entropy"],
             metric["unique_expressions"],
+            metric.get("successful_reactions"),
         ))
         for expression, count in Counter(metric.get("expressions", [])).items():
             states.append((config_id, metric["collision_number"], expression, count))
@@ -349,8 +367,8 @@ def save_run_metrics(config_id, metrics):
         with conn:
             conn.executemany('''
             INSERT INTO Averages
-            (config_id, collision_number, entropy, unique_expressions)
-            VALUES (?, ?, ?, ?)
+            (config_id, collision_number, entropy, unique_expressions, successful_reactions)
+            VALUES (?, ?, ?, ?, ?)
             ''', averages)
             conn.executemany('''
             INSERT INTO Experiment
@@ -480,7 +498,8 @@ def get_experiment_data(config_id):
     Returns:
         dict: {"config": <all Configurations columns as a dict>,
                "averages": [{"collision_number", "entropy",
-                             "unique_expressions"}, ...] in collision order}
+                             "unique_expressions", "successful_reactions"},
+                            ...] in collision order}
     """
     conn = sqlite3.connect(DB_NAME)
     conn.row_factory = sqlite3.Row
@@ -494,7 +513,7 @@ def get_experiment_data(config_id):
     
     # Get averages data
     cursor.execute('''
-    SELECT collision_number, entropy, unique_expressions
+    SELECT collision_number, entropy, unique_expressions, successful_reactions
     FROM Averages
     WHERE config_id = ?
     ORDER BY collision_number
